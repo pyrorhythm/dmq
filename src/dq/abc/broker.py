@@ -1,0 +1,40 @@
+from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import Protocol
+
+from ..types import Schedule, TaskMessage
+
+
+class QBrokerProtocol(Protocol):
+    async def send_task(
+        self,
+        task_name: str,
+        args: tuple,
+        kwargs: dict,
+        options: dict,
+        task_id: str | None = None,
+    ) -> str: ...
+
+    async def send_scheduled_task(
+        self,
+        task_name: str,
+        args: tuple,
+        kwargs: dict,
+        schedule: Schedule,
+        options: dict,
+        task_id: str | None = None,
+    ) -> str: ...
+
+    def consume(self) -> AsyncIterator[TaskMessage]: ...
+
+    async def consume_tasks(
+        self,
+        callback: Callable[[TaskMessage], Awaitable[None]],
+    ) -> None: ...
+
+    async def ack_task(self, task_id: str) -> None: ...
+
+    async def neg_ack_task(self, task_id: str, requeue: bool = True) -> None: ...
+
+    async def health_check(self) -> bool: ...
+
+    async def shutdown(self) -> None: ...
