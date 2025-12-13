@@ -12,7 +12,7 @@ from ..manager import QManager
 from ..worker_pool import QWorkerPool
 from .utils import import_object, import_tasks
 
-logger = loguru.logger.bind(name="dq.cli")
+logger = loguru.logger.bind(name="dmq.cli")
 
 
 async def run_worker(
@@ -47,7 +47,7 @@ async def run_worker(
 
     await pool.start()
 
-    logger.info("dq worker running...")
+    logger.info("dmq worker running...")
 
     await shutdown_event.wait()
 
@@ -58,13 +58,13 @@ async def run_worker(
 
 def cli() -> None:
     parser = argparse.ArgumentParser(
-        description="dq - Python-native distributed task queue worker",
+        description="dmq - Python-native distributed task queue worker",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  dq --broker myapp.broker:manager --tasks myapp.tasks
-  dq --broker myapp:manager --tasks tasks.email tasks.notifications --workers 8
-  dq --broker app:manager --tasks app.tasks --workers 4 --concurrency 20
+  dmq --broker myapp.broker:manager --tasks myapp.tasks
+  dmq --broker myapp:manager --tasks tasks.email tasks.notifications --workers 8
+  dmq --broker app:manager --tasks app.tasks --workers 4 --concurrency 20
         """,
     )
 
@@ -108,7 +108,7 @@ Examples:
     args = parser.parse_args()
 
     logger.info("=" * 60)
-    logger.info("dq worker starting...")
+    logger.info("dmq worker starting...")
     logger.info("=" * 60)
     logger.info("Broker: {}", args.broker)
     logger.info("Tasks: {}", ", ".join(args.tasks))

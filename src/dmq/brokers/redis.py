@@ -20,8 +20,8 @@ class RedisBroker:
     def __init__(
         self,
         redis_url: str = "redis://localhost:6379",
-        queue_name: str = "dq:tasks",
-        scheduled_queue: str = "dq:scheduled",
+        queue_name: str = "dmq:tasks",
+        scheduled_queue: str = "dmq:scheduled",
         serializer: QSerializerProtocol | None = None,
         poll_interval: float = 1.0,
     ) -> None:
@@ -122,7 +122,9 @@ class RedisBroker:
                     await self.redis.zrem(self.scheduled_queue, task_data)
 
                     message = self.serializer.deserialize(task_data)
-                    logger.debug("Scheduled task {} ready for execution", message.task_id)
+                    logger.debug(
+                        "Scheduled task {} ready for execution", message.task_id
+                    )
 
             except asyncio.CancelledError:
                 break

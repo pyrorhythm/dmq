@@ -1,5 +1,6 @@
-# dq
+# dmq
 
-## python-native task queue, based on pluggable architecture and combination of parallelism and concurrency
+#### --> Distributed Message Queue,
 
-> WIP
+> **fully python-native**, based on _pluggable architecture_ and _combination of
+parallelism & concurrency_
