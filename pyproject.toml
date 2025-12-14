@@ -1,6 +1,6 @@
 [project]
 name = "dmq"
-version = "0.0.1"
+version = "0.0.2"
 description = "python-native [d]istributed [m]essage [q]ueue"
 authors = [
     { email = "alexey@plassstic.tech", name = "pyrorhythm" }

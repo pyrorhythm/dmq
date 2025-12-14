@@ -86,15 +86,12 @@ class QWorkerPool:
         ]
 
         self._worker_tasks = [
-            asyncio.create_task(worker.start(), name=f"worker-{worker.worker_id}")
-            for worker in self.workers
+            asyncio.create_task(worker.start(), name=f"worker-{worker.worker_id}") for worker in self.workers
         ]
 
         await asyncio.gather(*[worker.wait_started() for worker in self.workers])
 
-        self._dispatcher_task = asyncio.create_task(
-            self._dispatcher_loop(), name="dispatcher"
-        )
+        self._dispatcher_task = asyncio.create_task(self._dispatcher_loop(), name="dispatcher")
 
         self._started.set()
         logger.info("pool initiated; {} workers", self.worker_count)
@@ -139,9 +136,7 @@ class QWorkerPool:
                 timeout=timeout,
             )
         except TimeoutError:
-            logger.warning(
-                "shutting down worker pool... timeout! cancelling remaining tasks"
-            )
+            logger.warning("shutting down worker pool... timeout! cancelling remaining tasks")
 
         for task in self._worker_tasks:
             if not task.done():

@@ -124,9 +124,7 @@ class RedisBroker:
                     await self.redis.zrem(self.scheduled_queue, task_data)
 
                     message = self.serializer.deserialize(task_data)
-                    logger.debug(
-                        "Scheduled task {} ready for execution", message.task_id
-                    )
+                    logger.debug("Scheduled task {} ready for execution", message.task_id)
 
             except asyncio.CancelledError:
                 break

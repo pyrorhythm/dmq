@@ -95,20 +95,12 @@ class PostgresResultBackend:
 
         expires_at = None
         if self.retention_policy:
-            ttl = (
-                self.retention_policy.success_ttl
-                if status == "success"
-                else self.retention_policy.failed_ttl
-            )
+            ttl = self.retention_policy.success_ttl if status == "success" else self.retention_policy.failed_ttl
             if ttl:
                 expires_at = datetime.now(UTC) + timedelta(seconds=ttl)
 
         result_data = self.serializer.serialize(result)
-        result_json = (
-            msgspec.json.decode(result_data)
-            if isinstance(result_data, bytes)
-            else result_data
-        )
+        result_json = msgspec.json.decode(result_data) if isinstance(result_data, bytes) else result_data
 
         async with self.pool.acquire() as conn:
             await conn.execute(

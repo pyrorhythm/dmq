@@ -1,6 +1,6 @@
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from functools import wraps
-from typing import Any, Awaitable, get_type_hints
+from typing import Any, get_type_hints
 
 from ulid import ulid
 
@@ -65,9 +65,7 @@ class QManager:
                         task_qname = f"task_{ulid()}"
                     else:
                         if "<lambda>" in task_qname:
-                            task_qname = task_qname.replace(
-                                "<lambda>", f"lambda_m{func.__module__}_{ulid()}"
-                            )
+                            task_qname = task_qname.replace("<lambda>", f"lambda_m{func.__module__}_{ulid()}")
                 wrp = wraps(func)
                 func_th = get_type_hints(func)
                 if "return" in func_th:

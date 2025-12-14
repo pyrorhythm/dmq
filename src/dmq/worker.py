@@ -4,7 +4,7 @@ import asyncio
 import contextlib
 import time
 import traceback
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
@@ -29,9 +29,7 @@ class QWorker:
         self.manager = manager
         self.worker_id = worker_id or f"worker-{id(self)}"
         self.delivery_config = delivery_config or DeliveryConfig()
-        self.idempotency_store = (
-            IdempotencyStore() if self.delivery_config.enable_idempotency else None
-        )
+        self.idempotency_store = IdempotencyStore() if self.delivery_config.enable_idempotency else None
         self.max_concurrent_tasks = max_concurrent_tasks
 
         self._running = False
@@ -144,9 +142,7 @@ class QWorker:
         try:
             task = self.manager.get_task(message.task_name)
 
-            emitter = UserEventEmitter(
-                message.task_id, message.task_name, self.manager.event_router
-            )
+            emitter = UserEventEmitter(message.task_id, message.task_name, self.manager.event_router)
             QTask.set_emitter(emitter)
 
             try:
@@ -185,9 +181,7 @@ class QWorker:
         except Exception as e:
             await self._handle_task_failure(message, e, start_time)
 
-    async def _handle_task_failure(
-        self, message: TaskMessage, exception: Exception, start_time: float
-    ) -> None:
+    async def _handle_task_failure(self, message: TaskMessage, exception: Exception, start_time: float) -> None:
         tb = traceback.format_exc()
 
         logger.warning(
