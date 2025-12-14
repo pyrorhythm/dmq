@@ -1,5 +1,5 @@
 sync:
-	uv sync --locked --all-extras --dev
+	uv sync --all-extras --dev
 
 publish-test:
 	uv publish --index=testpypi --trusted-publishing=always
