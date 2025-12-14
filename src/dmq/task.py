@@ -5,7 +5,7 @@ import sys
 import time
 from collections.abc import Callable
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Awaitable
 
 from loguru import logger
 from ulid import ulid
@@ -17,15 +17,15 @@ from .user_event import UserEventEmitter
 if TYPE_CHECKING:
     from .manager import QManager
 
-_current_emitter: contextvars.ContextVar[UserEventEmitter | None] = contextvars.ContextVar(
-    "current_emitter", default=None
+_current_emitter: contextvars.ContextVar[UserEventEmitter | None] = (
+    contextvars.ContextVar("current_emitter", default=None)
 )
 
 
 class QTask[**Param, ReturnType]:
     def __init__(
         self,
-        original_func: Callable[Param, ReturnType],
+        original_func: Callable[Param, ReturnType | Awaitable[ReturnType]],
         task_name: str,
         task_kws: dict,
         manager: QManager,
@@ -57,7 +57,9 @@ class QTask[**Param, ReturnType]:
     def e() -> UserEventEmitter:
         emitter = _current_emitter.get()
         if emitter is None:
-            raise RuntimeError("emit() can only be called from within a task execution context")
+            raise RuntimeError(
+                "emit() can only be called from within a task execution context"
+            )
         return emitter
 
     @staticmethod
@@ -94,17 +96,19 @@ class QTask[**Param, ReturnType]:
 
     async def sched(
         self,
-        *args: Param.args,
         delay: float | None = None,
         eta: datetime | None = None,
         cron: str | None = None,
+        *args: Param.args,
         **kwargs: Param.kwargs,
     ) -> str:
         schedule_params = [delay, eta, cron]
         provided_count = sum(p is not None for p in schedule_params)
 
         if provided_count != 1:
-            raise ValueError("Exactly one schedule parameter (delay, eta, or cron) must be provided")
+            raise ValueError(
+                "Exactly one schedule parameter (delay, eta, or cron) must be provided"
+            )
 
         task_id = str(ulid())
         options = self.task_labels.copy()

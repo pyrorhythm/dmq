@@ -53,8 +53,8 @@ class PostgresResultBackend:
     def __init__(
         self,
         dsn: str,
+        serializer: QSerializerProtocol,
         retention_policy: RetentionPolicy | None = None,
-        serializer: QSerializerProtocol | None = None,
     ) -> None:
         self.dsn = dsn
         self.pool: asyncpg.Pool | None = None
@@ -77,6 +77,9 @@ class PostgresResultBackend:
             await self.pool.close()
 
     async def _initialize_schema(self) -> None:
+        if self.pool is None:
+            raise ConnectionError("pg pool not initialized")
+
         async with self.pool.acquire() as conn:
             await conn.execute(SCHEMA_SQL)
 
@@ -87,14 +90,25 @@ class PostgresResultBackend:
         status: str = "success",
         task_name: str = "",
     ) -> None:
+        if self.pool is None:
+            raise ConnectionError("pg pool not initialized")
+
         expires_at = None
         if self.retention_policy:
-            ttl = self.retention_policy.success_ttl if status == "success" else self.retention_policy.failed_ttl
+            ttl = (
+                self.retention_policy.success_ttl
+                if status == "success"
+                else self.retention_policy.failed_ttl
+            )
             if ttl:
                 expires_at = datetime.now(UTC) + timedelta(seconds=ttl)
 
         result_data = self.serializer.serialize(result)
-        result_json = msgspec.json.decode(result_data) if isinstance(result_data, bytes) else result_data
+        result_json = (
+            msgspec.json.decode(result_data)
+            if isinstance(result_data, bytes)
+            else result_data
+        )
 
         async with self.pool.acquire() as conn:
             await conn.execute(
@@ -121,6 +135,8 @@ class PostgresResultBackend:
         deadline = time.time() + timeout if timeout else None
 
         while True:
+            if self.pool is None:
+                raise ConnectionError("pg pool not initialized")
             async with self.pool.acquire() as conn:
                 row = await conn.fetchrow(
                     "SELECT result, status FROM sotq.task_results WHERE task_id = $1",
@@ -136,6 +152,8 @@ class PostgresResultBackend:
             await asyncio.sleep(0.1)
 
     async def delete_result(self, task_id: str) -> None:
+        if self.pool is None:
+            raise ConnectionError("pg pool not initialized")
         async with self.pool.acquire() as conn:
             await conn.execute(
                 "DELETE FROM sotq.task_results WHERE task_id = $1",
@@ -143,6 +161,8 @@ class PostgresResultBackend:
             )
 
     async def result_exists(self, task_id: str) -> bool:
+        if self.pool is None:
+            raise ConnectionError("pg pool not initialized")
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow(
                 "SELECT 1 FROM sotq.task_results WHERE task_id = $1",
@@ -157,6 +177,8 @@ class PostgresResultBackend:
     ) -> None:
         msgspec.json.encode(state).decode()
 
+        if self.pool is None:
+            raise ConnectionError("pg pool not initialized")
         async with self.pool.acquire() as conn:
             await conn.execute(
                 """
@@ -179,6 +201,8 @@ class PostgresResultBackend:
             )
 
     async def get_workflow_state(self, workflow_id: str) -> Any:
+        if self.pool is None:
+            raise ConnectionError("pg pool not initialized")
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
@@ -206,6 +230,9 @@ class PostgresResultBackend:
             await self.cleanup_expired()
 
     async def cleanup_expired(self) -> int:
+        if self.pool is None:
+            raise ConnectionError("pg pool not initialized")
+
         async with self.pool.acquire() as conn:
             result = await conn.execute(
                 "DELETE FROM sotq.task_results WHERE expires_at IS NOT NULL AND expires_at < NOW()"

@@ -105,6 +105,8 @@ class RedisBroker:
                 return eta.timestamp()
             case CronSchedule(cron_expr=_):
                 raise NotImplementedError("Cron scheduling not yet implemented")
+            case _:
+                raise NotImplementedError("Unknown Schedule")
 
     async def _process_scheduled_tasks(self) -> None:
         while self._running:

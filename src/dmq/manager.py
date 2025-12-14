@@ -1,6 +1,6 @@
 from collections.abc import Callable
 from functools import wraps
-from typing import Any, get_type_hints
+from typing import Any, Awaitable, get_type_hints
 
 from ulid import ulid
 
@@ -46,7 +46,7 @@ class QManager:
         **kws: dict,
     ) -> Any:
         def _make[**Param, Return](
-            task_qname: str | None = None, task_kws: dict = None
+            task_qname: str | None = None, task_kws: dict | None = None
         ) -> Callable[
             [Callable[Param, Return]],
             QTask[Param, Return],
@@ -55,7 +55,7 @@ class QManager:
                 task_kws = {}
 
             def inner(
-                func: Callable[Param, Return],
+                func: Callable[Param, Return | Awaitable[Return]],
             ) -> QTask[Param, Return]:
                 nonlocal task_qname
                 if task_qname is None:
@@ -65,7 +65,9 @@ class QManager:
                         task_qname = f"task_{ulid()}"
                     else:
                         if "<lambda>" in task_qname:
-                            task_qname = task_qname.replace("<lambda>", f"lambda_m{func.__module__}_{ulid()}")
+                            task_qname = task_qname.replace(
+                                "<lambda>", f"lambda_m{func.__module__}_{ulid()}"
+                            )
                 wrp = wraps(func)
                 func_th = get_type_hints(func)
                 if "return" in func_th:

@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING, Any
 
 import redis.asyncio as redis
 
+from dmq.serializers.msgpack import MsgpackSerializer
+
 if TYPE_CHECKING:
     from ..abc.serializer import QSerializerProtocol
 
@@ -14,7 +16,7 @@ class RedisResultBackend:
         self,
         redis_url: str = "redis://localhost:6379",
         default_ttl: int = 3600,
-        serializer: QSerializerProtocol | None = None,
+        serializer: QSerializerProtocol = MsgpackSerializer,
     ) -> None:
         self.redis = redis.from_url(redis_url)
         self.default_ttl = default_ttl

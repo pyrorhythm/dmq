@@ -12,7 +12,9 @@ from ..types import CronSchedule, DelaySchedule, ETASchedule, Schedule, TaskMess
 class InMemoryBroker:
     def __init__(self, max_concurrent_per_consumer: int = 10) -> None:
         self._task_queue: asyncio.Queue[TaskMessage] = asyncio.Queue()
-        self._scheduled_queue: asyncio.PriorityQueue[tuple[float, TaskMessage]] = asyncio.PriorityQueue()
+        self._scheduled_queue: asyncio.PriorityQueue[tuple[float, TaskMessage]] = (
+            asyncio.PriorityQueue()
+        )
         self._processing: set[str] = set()
         self._processing_lock = asyncio.Lock()
         self._scheduler_task: asyncio.Task | None = None
@@ -76,7 +78,11 @@ class InMemoryBroker:
             case ETASchedule(eta=eta):
                 return eta.timestamp()
             case CronSchedule(cron_expr=_):
-                raise NotImplementedError("Cron scheduling not yet implemented in InMemoryBroker")
+                raise NotImplementedError(
+                    "Cron scheduling not yet implemented in InMemoryBroker"
+                )
+            case _:
+                raise NotImplementedError("Unknown Schedule")
 
     async def _process_scheduled_tasks(self) -> None:
         while self._running:
