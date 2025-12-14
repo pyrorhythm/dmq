@@ -95,11 +95,12 @@ wheels = [
 
 [[package]]
 name = "dmq"
-version = "0.0.1"
+version = "0.0.2"
 source = { editable = "." }
 dependencies = [
     { name = "loguru" },
     { name = "msgspec" },
+    { name = "ormsgpack" },
     { name = "ulid" },
 ]
 
@@ -108,11 +109,11 @@ all-ft = [
     { name = "asyncpg" },
     { name = "ormsgpack" },
 ]
-ormsgpack = [
-    { name = "ormsgpack" },
-]
 postgres = [
     { name = "asyncpg" },
+]
+redis = [
+    { name = "redis" },
 ]
 
 [package.dev-dependencies]
@@ -130,11 +131,12 @@ requires-dist = [
     { name = "asyncpg", marker = "extra == 'postgres'", specifier = ">=0.30.0" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "msgspec", specifier = ">=0.18.0" },
+    { name = "ormsgpack", specifier = ">=1.5.0" },
     { name = "ormsgpack", marker = "extra == 'all-ft'", specifier = ">=1.5.0" },
-    { name = "ormsgpack", marker = "extra == 'ormsgpack'", specifier = ">=1.5.0" },
+    { name = "redis", marker = "extra == 'redis'", specifier = ">=7" },
     { name = "ulid", specifier = ">=1.1" },
 ]
-provides-extras = ["ormsgpack", "postgres", "all-ft"]
+provides-extras = ["redis", "postgres", "all-ft"]
 
 [package.metadata.requires-dev]
 dev = [
