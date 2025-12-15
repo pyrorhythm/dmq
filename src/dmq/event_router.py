@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import weakref
 from typing import TYPE_CHECKING
 
 from .events import QEvent
@@ -12,8 +13,29 @@ if TYPE_CHECKING:
 class EventRouter:
     def __init__(self) -> None:
         self._callbacks: list[Callback] = []
-        self._event_queue: asyncio.Queue[QEvent] = asyncio.Queue()
-        self._listener_task: asyncio.Task | None = None
+        self._event_queues: weakref.WeakKeyDictionary[
+            asyncio.AbstractEventLoop, asyncio.Queue[QEvent]
+        ] = weakref.WeakKeyDictionary()
+        self._listener_tasks: weakref.WeakKeyDictionary[
+            asyncio.AbstractEventLoop, asyncio.Task
+        ] = weakref.WeakKeyDictionary()
+
+    def _get_queue(self) -> asyncio.Queue[QEvent]:
+        """Get event queue for the current event loop."""
+        loop = asyncio.get_running_loop()
+        if loop not in self._event_queues:
+            self._event_queues[loop] = asyncio.Queue()
+        return self._event_queues[loop]
+
+    def _get_listener_task(self) -> asyncio.Task | None:
+        """Get listener task for the current event loop."""
+        loop = asyncio.get_running_loop()
+        return self._listener_tasks.get(loop)
+
+    def _set_listener_task(self, task: asyncio.Task) -> None:
+        """Set listener task for the current event loop."""
+        loop = asyncio.get_running_loop()
+        self._listener_tasks[loop] = task
 
     def register_callback(self, callback: Callback) -> None:
         self._callbacks.append(callback)
@@ -22,14 +44,17 @@ class EventRouter:
         self._callbacks.remove(callback)
 
     async def emit(self, event: QEvent) -> None:
-        await self._event_queue.put(event)
+        queue = self._get_queue()
+        await queue.put(event)
 
-        if self._listener_task is None or self._listener_task.done():
-            self._listener_task = asyncio.create_task(self._process_events())
+        listener_task = self._get_listener_task()
+        if listener_task is None or listener_task.done():
+            self._set_listener_task(asyncio.create_task(self._process_events()))
 
     async def _process_events(self) -> None:
-        while not self._event_queue.empty():
-            event = await self._event_queue.get()
+        queue = self._get_queue()
+        while not queue.empty():
+            event = await queue.get()
             await self._route_event(event)
 
     async def _route_event(self, event: QEvent) -> None:

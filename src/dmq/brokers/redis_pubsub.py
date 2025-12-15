@@ -25,60 +25,35 @@ class RedisPubSubBroker:
         self.redis = redis.from_url(redis_url)
         self.topics = topics or {}
         self.partition_strategy = partition_strategy or HashPartitionStrategy()
-        self.serializer = serializer or MsgpackSerializer
+        self.serializer = serializer or MsgpackSerializer.with_type(TaskMessage)
 
     async def create_topic(self, config: TopicConfig) -> None:
         self.topics[config.name] = config
 
-    async def send_task(
-        self,
-        task_name: str,
-        args: tuple,
-        kwargs: dict,
-        options: dict,
-    ) -> str:
+    async def send_task(self, task_name: str, args: tuple, kwargs: dict, options: dict) -> str:
         from ulid import ulid
 
         task_id = str(ulid())
 
-        message = TaskMessage(
-            task_id=task_id,
-            task_name=task_name,
-            args=args,
-            kwargs=kwargs,
-            options=options,
-        )
+        message = TaskMessage(task_id=task_id, task_name=task_name, args=args, kwargs=kwargs, options=options)
 
         topic = options.get("topic", "default")
         await self.send_to_topic(topic, message)
 
         return task_id
 
-    async def send_to_topic(
-        self,
-        topic: str,
-        message: TaskMessage,
-        partition_key: str | None = None,
-    ) -> None:
+    async def send_to_topic(self, topic: str, message: TaskMessage, partition_key: str | None = None) -> None:
         if topic not in self.topics:
-            raise ValueError(f"Topic {topic} not found. Create it first with create_topic()")
+            raise ValueError(f"topic {topic} not found. create it first with create_topic()")
 
         topic_config = self.topics[topic]
-        partition = await self.partition_strategy.get_partition(
-            message,
-            topic_config.partition_count,
-        )
+        partition = await self.partition_strategy.get_partition(message, topic_config.partition_count)
 
         channel = f"sotq:topic:{topic}:partition:{partition}"
         data = self.serializer.serialize(message)
         await self.redis.publish(channel, data)
 
-    async def consume_partitions(
-        self,
-        topic: str,
-        partitions: list[int],
-        group_id: str,
-    ) -> AsyncIterator[TaskMessage]:
+    async def consume_partitions(self, topic: str, partitions: list[int], group_id: str) -> AsyncIterator[TaskMessage]:
         pubsub = self.redis.pubsub()
 
         channels = [f"sotq:topic:{topic}:partition:{p}" for p in partitions]
@@ -92,7 +67,8 @@ class RedisPubSubBroker:
 
     async def consume_tasks(self, callback) -> Never:
         raise NotImplementedError(
-            "RedisPubSubBroker uses consume_partitions. Use the simple InMemoryBroker for basic consume_tasks support."
+            "redis_pubsub_broker uses consume_partitions. use the simple inmemory_broker for basic "
+            "consume_tasks support."
         )
 
     async def ack_task(self, task_id: str) -> None:

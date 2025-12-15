@@ -8,11 +8,17 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
-from .events import QEventType, QTaskCompleted, QTaskFailed, QTaskRetry, QTaskStarted
+from .events import (
+    _task_completed_event,
+    _task_failure_event,
+    _task_retry_event,
+    _task_started_event,
+)
 from .guarantees import DeliveryConfig, IdempotencyStore
 from .task import QTask
 from .types import TaskMessage
 from .user_event import UserEventEmitter
+from .util.misc import await_if_async
 
 if TYPE_CHECKING:
     from .manager import QManager
@@ -87,13 +93,13 @@ class QWorker:
             active = [t for t in self._pending_tasks if not t.done()]
             if active:
                 logger.info(
-                    "Worker {} waiting for {} pending tasks",
+                    "worker {} waiting for {} pending tasks",
                     self.worker_id,
                     len(active),
                 )
                 await asyncio.gather(*active, return_exceptions=True)
 
-        logger.info("Worker {} stopped", self.worker_id)
+        logger.info("worker {} stopped", self.worker_id)
 
     async def _process_loop(self) -> None:
         while self._running:
@@ -110,7 +116,7 @@ class QWorker:
 
     async def _execute_with_semaphore(self, message: TaskMessage) -> None:
         if self._semaphore is None:
-            logger.warning("sema is None; executing task without semaphore")
+            logger.warning("sema is none; executing task without semaphore")
             await self._handle_task(message)
             return
 
@@ -130,13 +136,7 @@ class QWorker:
 
         start_time = time.time()
 
-        start_event = QTaskStarted(
-            event_type=QEventType.TASK_STARTED,
-            task_id=message.task_id,
-            task_name=message.task_name,
-            timestamp=start_time,
-            worker_id=self.worker_id,
-        )
+        start_event = _task_started_event(message, start_time, self.worker_id)
         await self.manager.event_router.emit(start_event)
 
         try:
@@ -146,7 +146,7 @@ class QWorker:
             QTask.set_emitter(emitter)
 
             try:
-                result = await task.original_func(*message.args, **message.kwargs)
+                result = await await_if_async(task.original_func(*message.args, **message.kwargs))
             finally:
                 QTask.set_emitter(None)
 
@@ -158,21 +158,14 @@ class QWorker:
                 )
 
             duration = time.time() - start_time
-            complete_event = QTaskCompleted(
-                event_type=QEventType.TASK_COMPLETED,
-                task_id=message.task_id,
-                task_name=message.task_name,
-                timestamp=time.time(),
-                duration=duration,
-                result=result,
-            )
+            complete_event = _task_completed_event(message, duration, result)
             await self.manager.event_router.emit(complete_event)
 
             if self.delivery_config.should_ack_after_processing():
                 await self.manager.broker.ack_task(message.task_id)
 
             logger.debug(
-                "Worker {} completed task {} in {:.3f}s",
+                "worker {} completed task {} in {:.3f}s",
                 self.worker_id,
                 message.task_id,
                 duration,
@@ -185,35 +178,19 @@ class QWorker:
         tb = traceback.format_exc()
 
         logger.warning(
-            "Worker {} task {} failed: {}",
+            "worker {} task {} failed: {}",
             self.worker_id,
             message.task_id,
             exception,
         )
 
         if message.retry_count < message.max_retries:
-            retry_event = QTaskRetry(
-                event_type=QEventType.TASK_RETRY,
-                task_id=message.task_id,
-                task_name=message.task_name,
-                timestamp=time.time(),
-                retry_count=message.retry_count + 1,
-                max_retries=message.max_retries,
-                delay=2.0**message.retry_count,
-            )
+            retry_event = _task_retry_event(message)
             await self.manager.event_router.emit(retry_event)
 
             await self.manager.broker.neg_ack_task(message.task_id, requeue=True)
         else:
-            failed_event = QTaskFailed(
-                event_type=QEventType.TASK_FAILED,
-                task_id=message.task_id,
-                task_name=message.task_name,
-                timestamp=time.time(),
-                exception=str(exception),
-                traceback=tb,
-                retry_count=message.retry_count,
-            )
+            failed_event = _task_failure_event(message, exception)
             await self.manager.event_router.emit(failed_event)
 
             await self.manager.result_backend.store_result(message.task_id, exception)

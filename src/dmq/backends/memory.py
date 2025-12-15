@@ -26,10 +26,10 @@ class InMemoryResultBackend:
         try:
             await asyncio.wait_for(event.wait(), timeout=timeout)
         except TimeoutError as e:
-            raise TimeoutError(f"Timeout waiting for result of task {task_id}") from e
+            raise TimeoutError(f"timeout waiting for result of task {task_id}") from e
 
         if task_id not in self._results:
-            raise KeyError(f"Task {task_id} not found")
+            raise KeyError(f"task {task_id} not found")
 
         return self._results[task_id]
 

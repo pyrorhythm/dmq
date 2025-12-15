@@ -1,9 +1,9 @@
-from typing import Any, Protocol
+from typing import Protocol
+
+from msgspec.inspect import NoneType
 
 
 class QSerializerProtocol(Protocol):
-    @staticmethod
-    def serialize(data: Any) -> bytes: ...
+    def serialize[T](self, data: T) -> bytes: ...
 
-    @staticmethod
-    def deserialize(data: bytes) -> Any: ...
+    def deserialize[T](self, data: bytes, into: type | NoneType = NoneType) -> T: ...

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import msgspec
+
+if TYPE_CHECKING:
+    from .manager import QManager
 
 
 class DelaySchedule(msgspec.Struct, frozen=True):
@@ -30,3 +33,15 @@ class TaskMessage(msgspec.Struct, frozen=True):
     workflow_context: dict[str, Any] | None = None
     retry_count: int = 0
     max_retries: int = 3
+
+
+class QInProgressTask(msgspec.Struct, frozen=True):
+    _id: str
+    _manager: QManager
+
+    async def result(self, timeout: float = 1.0, blocking: bool = False) -> Any:
+        return await self._manager.result_backend.get_result(self._id, timeout if not blocking else None)
+
+    @property
+    def id(self) -> str:
+        return self._id

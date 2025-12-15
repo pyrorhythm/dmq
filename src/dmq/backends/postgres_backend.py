@@ -14,32 +14,32 @@ if TYPE_CHECKING:
 
 
 SCHEMA_SQL = """
-CREATE SCHEMA IF NOT EXISTS sotq;
+create schema if not exists dmq;
 
-CREATE TABLE IF NOT EXISTS sotq.task_results (
-    id SERIAL PRIMARY KEY,
-    task_id VARCHAR(26) UNIQUE NOT NULL,
-    task_name VARCHAR(255) NOT NULL,
-    result JSONB,
-    status VARCHAR(50) NOT NULL CHECK (status IN ('pending', 'success', 'failed', 'retry')),
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    completed_at TIMESTAMPTZ,
-    expires_at TIMESTAMPTZ,
-    metadata JSONB
+create table if not exists dmq.task_results (
+    id serial primary key,
+    task_id varchar(26) unique not null,
+    task_name varchar(255) not null,
+    result jsonb,
+    status varchar(50) not null check (status in ('PENDING', 'SUCCESS', 'FAILED', 'RETRY')),
+    created_at timestamptz default now(),
+    completed_at timestamptz,
+    expires_at timestamptz,
+    metadata jsonb
 );
 
-CREATE INDEX IF NOT EXISTS idx_task_results_task_id ON sotq.task_results(task_id);
-CREATE INDEX IF NOT EXISTS idx_task_results_expires_at ON sotq.task_results(expires_at) WHERE expires_at IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_task_results_status ON sotq.task_results(status);
+create index if not exists idx_task_results_task_id on dmq.task_results(task_id);
+create index if not exists idx_task_results_expires_at on dmq.task_results(expires_at) where expires_at is not null;
+create index if not exists idx_task_results_status on dmq.task_results(status);
 
-CREATE TABLE IF NOT EXISTS sotq.workflow_states (
-    workflow_id VARCHAR(26) PRIMARY KEY,
-    workflow_name VARCHAR(255) NOT NULL,
-    current_nodes JSONB NOT NULL,
-    completed_nodes JSONB NOT NULL,
-    results JSONB NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+create table if not exists dmq.workflow_states (
+    workflow_id varchar(26) primary key,
+    workflow_name varchar(255) not null,
+    current_nodes jsonb not null,
+    completed_nodes jsonb not null,
+    results jsonb not null,
+    created_at timestamptz default now(),
+    updated_at timestamptz default now()
 );
 """
 
@@ -51,11 +51,9 @@ class RetentionPolicy(msgspec.Struct, frozen=True):
 
 class PostgresResultBackend:
     def __init__(
-        self,
-        dsn: str,
-        serializer: QSerializerProtocol,
-        retention_policy: RetentionPolicy | None = None,
+        self, dsn: str, serializer: QSerializerProtocol, retention_policy: RetentionPolicy | None = None
     ) -> None:
+        self._type_memory: dict[str, type] = {}
         self.dsn = dsn
         self.pool: asyncpg.Pool | None = None
         self.retention_policy = retention_policy or RetentionPolicy()
@@ -83,13 +81,7 @@ class PostgresResultBackend:
         async with self.pool.acquire() as conn:
             await conn.execute(SCHEMA_SQL)
 
-    async def store_result(
-        self,
-        task_id: str,
-        result: Any,
-        status: str = "success",
-        task_name: str = "",
-    ) -> None:
+    async def store_result(self, task_id: str, result: Any, status: str = "success", task_name: str = "") -> None:
         if self.pool is None:
             raise ConnectionError("pg pool not initialized")
 
@@ -99,21 +91,21 @@ class PostgresResultBackend:
             if ttl:
                 expires_at = datetime.now(UTC) + timedelta(seconds=ttl)
 
-        result_data = self.serializer.serialize(result)
+        result_data = msgspec.json.encode(result)
         result_json = msgspec.json.decode(result_data) if isinstance(result_data, bytes) else result_data
 
         async with self.pool.acquire() as conn:
             await conn.execute(
                 """
-                INSERT INTO sotq.task_results
+                insert into dmq.task_results
                 (task_id, task_name, result, status, completed_at, expires_at)
-                VALUES ($1, $2, $3::jsonb, $4, $5, $6)
-                ON CONFLICT (task_id)
-                DO UPDATE SET
-                    result = EXCLUDED.result,
-                    status = EXCLUDED.status,
-                    completed_at = EXCLUDED.completed_at,
-                    expires_at = EXCLUDED.expires_at
+                values ($1, $2, $3::jsonb, $4, $5, $6)
+                on conflict (task_id)
+                do update set
+                    result = excluded.result,
+                    status = excluded.status,
+                    completed_at = excluded.completed_at,
+                    expires_at = excluded.expires_at
                 """,
                 task_id,
                 task_name,
@@ -130,10 +122,7 @@ class PostgresResultBackend:
             if self.pool is None:
                 raise ConnectionError("pg pool not initialized")
             async with self.pool.acquire() as conn:
-                row = await conn.fetchrow(
-                    "SELECT result, status FROM sotq.task_results WHERE task_id = $1",
-                    task_id,
-                )
+                row = await conn.fetchrow("select result, status from dmq.task_results where task_id = $1", task_id)
 
             if row and row["status"] in ("success", "failed"):
                 return msgspec.json.decode(row["result"])
@@ -147,26 +136,16 @@ class PostgresResultBackend:
         if self.pool is None:
             raise ConnectionError("pg pool not initialized")
         async with self.pool.acquire() as conn:
-            await conn.execute(
-                "DELETE FROM sotq.task_results WHERE task_id = $1",
-                task_id,
-            )
+            await conn.execute("delete from dmq.task_results where task_id = $1", task_id)
 
     async def result_exists(self, task_id: str) -> bool:
         if self.pool is None:
             raise ConnectionError("pg pool not initialized")
         async with self.pool.acquire() as conn:
-            row = await conn.fetchrow(
-                "SELECT 1 FROM sotq.task_results WHERE task_id = $1",
-                task_id,
-            )
+            row = await conn.fetchrow("select 1 from dmq.task_results where task_id = $1", task_id)
             return row is not None
 
-    async def store_workflow_state(
-        self,
-        workflow_id: str,
-        state: Any,
-    ) -> None:
+    async def store_workflow_state(self, workflow_id: str, state: Any) -> None:
         msgspec.json.encode(state).decode()
 
         if self.pool is None:
@@ -174,15 +153,15 @@ class PostgresResultBackend:
         async with self.pool.acquire() as conn:
             await conn.execute(
                 """
-                INSERT INTO sotq.workflow_states
+                insert into dmq.workflow_states
                 (workflow_id, workflow_name, current_nodes, completed_nodes, results, updated_at)
-                VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6)
-                ON CONFLICT (workflow_id)
-                DO UPDATE SET
-                    current_nodes = EXCLUDED.current_nodes,
-                    completed_nodes = EXCLUDED.completed_nodes,
-                    results = EXCLUDED.results,
-                    updated_at = EXCLUDED.updated_at
+                values ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6)
+                on conflict (workflow_id)
+                do update set
+                    current_nodes = excluded.current_nodes,
+                    completed_nodes = excluded.completed_nodes,
+                    results = excluded.results,
+                    updated_at = excluded.updated_at
                 """,
                 workflow_id,
                 getattr(state, "workflow_name", "unknown"),
@@ -198,9 +177,9 @@ class PostgresResultBackend:
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
-                SELECT workflow_name, current_nodes, completed_nodes, results
-                FROM sotq.workflow_states
-                WHERE workflow_id = $1
+                select workflow_name, current_nodes, completed_nodes, results
+                from dmq.workflow_states
+                where workflow_id = $1
                 """,
                 workflow_id,
             )
@@ -227,6 +206,6 @@ class PostgresResultBackend:
 
         async with self.pool.acquire() as conn:
             result = await conn.execute(
-                "DELETE FROM sotq.task_results WHERE expires_at IS NOT NULL AND expires_at < NOW()"
+                "delete from dmq.task_results where expires_at is not null and expires_at < now()"
             )
             return int(result.split()[-1])

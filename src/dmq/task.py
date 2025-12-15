@@ -5,13 +5,13 @@ import sys
 import time
 from collections.abc import Awaitable, Callable
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 from ulid import ulid
 
 from .events import QEventType, QTaskQueued
-from .types import CronSchedule, DelaySchedule, ETASchedule
+from .types import CronSchedule, DelaySchedule, ETASchedule, QInProgressTask
 from .user_event import UserEventEmitter
 
 if TYPE_CHECKING:
@@ -32,10 +32,10 @@ class QTask[**Param, ReturnType]:
         return_type: type[ReturnType] | None = None,
     ) -> None:
         self.original_func = original_func
-        self.task_name = task_name
-        self.task_labels = task_kws
-        self.manager = manager
-        self.return_type = return_type
+        self.task_name: str = task_name
+        self.task_labels: dict[str, Any] = task_kws
+        self.manager: QManager = manager
+        self.return_type: type[ReturnType] | None = return_type
 
         new_name = f"{self.original_func.__name__}_org_dq"  # ty: ignore
         self.original_func.__name__ = new_name  # ty: ignore
@@ -44,11 +44,7 @@ class QTask[**Param, ReturnType]:
             original_qualname[-1] = new_name
             new_qualname = ".".join(original_qualname)
             self.original_func.__qualname__ = new_qualname  # ty: ignore
-        setattr(
-            sys.modules[original_func.__module__],
-            new_name,
-            original_func,
-        )
+        setattr(sys.modules[original_func.__module__], new_name, original_func)
 
     async def __call__(self, *args: Param.args, **kwargs: Param.kwargs) -> ReturnType:
         return await self.original_func(*args, **kwargs)  # type: ignore
@@ -64,7 +60,7 @@ class QTask[**Param, ReturnType]:
     def set_emitter(emitter: UserEventEmitter | None) -> None:
         _current_emitter.set(emitter)
 
-    async def q(self, *args: Param.args, **kwargs: Param.kwargs) -> str:
+    async def q(self, *args: Param.args, **kwargs: Param.kwargs) -> QInProgressTask:
         task_id = str(ulid())
         options = self.task_labels.copy()
 
@@ -81,16 +77,12 @@ class QTask[**Param, ReturnType]:
         logger.info("{}", event)
 
         await self.manager.broker.send_task(
-            task_name=self.task_name,
-            args=args,
-            kwargs=kwargs,
-            options=options,
-            task_id=task_id,
+            task_name=self.task_name, args=args, kwargs=kwargs, options=options, task_id=task_id
         )
 
         logger.info("sent task")
 
-        return task_id
+        return QInProgressTask(task_id, self.manager)
 
     async def sched(
         self,
@@ -99,12 +91,12 @@ class QTask[**Param, ReturnType]:
         cron: str | None = None,
         *args: Param.args,
         **kwargs: Param.kwargs,
-    ) -> str:
+    ) -> QInProgressTask:
         schedule_params = [delay, eta, cron]
         provided_count = sum(p is not None for p in schedule_params)
 
         if provided_count != 1:
-            raise ValueError("Exactly one schedule parameter (delay, eta, or cron) must be provided")
+            raise ValueError("exactly one schedule parameter (delay, eta, or cron) must be provided")
 
         task_id = str(ulid())
         options = self.task_labels.copy()
@@ -117,12 +109,7 @@ class QTask[**Param, ReturnType]:
             schedule = CronSchedule(cron_expr=cron)  # type: ignore
 
         await self.manager.broker.send_scheduled_task(
-            task_name=self.task_name,
-            args=args,
-            kwargs=kwargs,
-            schedule=schedule,
-            options=options,
-            task_id=task_id,
+            task_name=self.task_name, args=args, kwargs=kwargs, schedule=schedule, options=options, task_id=task_id
         )
 
-        return task_id
+        return QInProgressTask(task_id, self.manager)

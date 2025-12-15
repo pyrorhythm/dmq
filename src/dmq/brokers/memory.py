@@ -37,7 +37,7 @@ class InMemoryBroker:
             options=options,
         )
         await self._task_queue.put(message)
-        logger.debug("Task {} queued: {}", task_id, task_name)
+        logger.debug("task {} queued: {}", task_id, task_name)
         return task_id
 
     async def send_scheduled_task(
@@ -76,9 +76,10 @@ class InMemoryBroker:
             case ETASchedule(eta=eta):
                 return eta.timestamp()
             case CronSchedule(cron_expr=_):
-                raise NotImplementedError("Cron scheduling not yet implemented in InMemoryBroker")
+                raise NotImplementedError("cron scheduling not yet implemented in in-memory "
+										  "broker")
             case _:
-                raise NotImplementedError("Unknown Schedule")
+                raise NotImplementedError("unknown schedule")
 
     async def _process_scheduled_tasks(self) -> None:
         while self._running:
@@ -91,16 +92,16 @@ class InMemoryBroker:
 
             if now >= execute_at:
                 await self._task_queue.put(message)
-                logger.debug("Scheduled task {} ready for execution", message.task_id)
+                logger.debug("scheduled task {} ready for execution", message.task_id)
             else:
                 await self._scheduled_queue.put((execute_at, message))
                 await asyncio.sleep(min(execute_at - now, 1.0))
 
     async def consume(self) -> AsyncIterator[TaskMessage]:
         """
-        Asynchronously consume messages from the queue.
+        asynchronously consume messages from the queue
 
-        `return:` TaskMessage asynchronous iterator.
+        `return:` asynchronous iterator of TaskMessage
         """
 
         while self._running:
@@ -146,7 +147,7 @@ class InMemoryBroker:
             pending_tasks -= done
 
         if pending_tasks:
-            logger.info("Waiting for {} pending tasks to complete", len(pending_tasks))
+            logger.info("waiting for {} pending tasks to complete", len(pending_tasks))
             await asyncio.gather(*pending_tasks, return_exceptions=True)
 
     async def ack_task(self, task_id: str) -> None:

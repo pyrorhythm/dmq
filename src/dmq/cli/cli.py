@@ -4,11 +4,14 @@ import argparse
 import asyncio
 import signal
 import sys
+from argparse import Namespace
 
 import loguru
 
+from ..execution_mode import ExecutionMode
 from ..guarantees import DeliveryConfig, DeliveryGuarantee
 from ..manager import QManager
+from ..runtime import detect_execution_mode, get_recommended_worker_count
 from ..worker_pool import QWorkerPool
 from .utils import import_object, import_tasks
 
@@ -20,10 +23,14 @@ async def run_worker(
     worker_count: int,
     max_tasks_per_worker: int,
     delivery_guarantee: str,
+    execution_mode: ExecutionMode | None = None,
 ) -> None:
+    # auto detect execution mode if not specified
+    if execution_mode is None:
+        execution_mode = detect_execution_mode()
+
     delivery_config = DeliveryConfig(
-        guarantee=DeliveryGuarantee(delivery_guarantee),
-        enable_idempotency=delivery_guarantee == "exactly_once",
+        guarantee=DeliveryGuarantee(delivery_guarantee), enable_idempotency=delivery_guarantee == "exactly_once"
     )
 
     pool = QWorkerPool(
@@ -31,6 +38,7 @@ async def run_worker(
         worker_count=worker_count,
         max_tasks_per_worker=max_tasks_per_worker,
         delivery_config=delivery_config,
+        execution_mode=execution_mode,
     )
 
     loop = asyncio.get_running_loop()
@@ -44,6 +52,7 @@ async def run_worker(
         loop.add_signal_handler(_sig, handle_signal, _sig)
 
     logger.info("preset delivery guarantee: {}", delivery_guarantee)
+    logger.info("execution mode: {}", execution_mode)
 
     await pool.start()
 
@@ -58,43 +67,33 @@ async def run_worker(
 
 def cli() -> None:
     parser = argparse.ArgumentParser(
-        description="dmq - Python-native distributed task queue worker",
+        description="dmq - python native distributed task queue worker",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Examples:
+examples:
   dmq --broker myapp.broker:manager --tasks myapp.tasks
   dmq --broker myapp:manager --tasks tasks.email tasks.notifications --workers 8
   dmq --broker app:manager --tasks app.tasks --workers 4 --concurrency 20
+  dmq --broker app:manager --tasks app.tasks --execution-mode threaded
         """,
     )
 
     parser.add_argument(
-        "--broker",
-        required=True,
-        help="Python path to QManager instance (e.g., 'myapp.broker:manager')",
+        "--broker", required=True, help="python path to qmanager instance (e g., 'myapp broker:manager')"
     )
 
-    parser.add_argument(
-        "--tasks",
-        nargs="+",
-        required=True,
-        help="Task modules to import (space-separated)",
-    )
+    parser.add_argument("--tasks", nargs="+", required=True, help="task modules to import (space separated)")
 
     parser.add_argument(
         "--workers",
         "-w",
         type=int,
-        default=4,
-        help="Number of parallel workers (default: 4)",
+        default=None,
+        help="number of parallel workers (default: auto detect based on execution mode)",
     )
 
     parser.add_argument(
-        "--concurrency",
-        "-c",
-        type=int,
-        default=10,
-        help="Max concurrent tasks per worker (default: 10)",
+        "--concurrency", "-c", type=int, default=10, help="max concurrent tasks per worker (default: 10)"
     )
 
     parser.add_argument(
@@ -102,47 +101,69 @@ Examples:
         "-g",
         choices=["at_most_once", "at_least_once", "exactly_once"],
         default="at_least_once",
-        help="Delivery guarantee (default: at_least_once)",
+        help="delivery guarantee (default: at least once)",
     )
 
-    args = parser.parse_args()
+    parser.add_argument(
+        "--execution-mode",
+        "-e",
+        choices=["auto", "async", "threaded"],
+        default="auto",
+        help="execution mode: auto (detect), async (single loop), threaded (multi thread). default: auto",
+    )
 
-    logger.info("=" * 60)
-    logger.info("dmq worker starting...")
-    logger.info("=" * 60)
-    logger.info("Broker: {}", args.broker)
-    logger.info("Tasks: {}", ", ".join(args.tasks))
+    parser.add_argument("--log-level", "-l", choices=["debug", "info", "warning"], default="info", help="log level")
+
+    args: Namespace = parser.parse_args()
+
+    # determine execution mode
+    if args.execution_mode == "auto":
+        execution_mode = None  # will be auto detected in run worker
+    elif args.execution_mode == "async":
+        execution_mode = ExecutionMode.ASYNC_ONLY
+    else:
+        execution_mode = ExecutionMode.THREADED
+
+    logger.remove()
+    logger.add(sys.stderr, level=args.log_level.upper())
+
+    # determine worker count
+    if args.workers is None:
+        # auto select based on detected/forced mode
+        detected_mode = execution_mode or detect_execution_mode()
+        worker_count = get_recommended_worker_count(detected_mode, None)
+    else:
+        worker_count = args.workers
+
+    logger.info("=" * 60 + "\n" + "dmq worker starting..." + "\n" + "=" * 60)
+    logger.info("broker: {}", args.broker)
+    logger.info("tasks: {}", ", ".join(args.tasks))
+    logger.info("workers: {}", worker_count)
+    logger.info("execution mode: {}", args.execution_mode)
 
     # Import manager and tasks
     try:
         manager = import_object(args.broker)
         if not isinstance(manager, QManager):
-            logger.error("Imported object is not a QManager instance")
+            logger.error("imported object is not a qmanager instance")
             sys.exit(1)
     except Exception as e:
-        logger.error("Failed to import broker: {}", e)
+        logger.error("failed to import broker: {}", e)
         sys.exit(1)
 
     try:
         import_tasks(args.tasks, pattern="", fs_discover=False)
     except Exception as e:
-        logger.error("Failed to import tasks: {}", e)
+        logger.error("failed to import tasks: {}", e)
         sys.exit(1)
 
-    logger.info("Registered tasks: {}", list(manager.task_registry.keys()))
+    logger.info("registered tasks: {}", list(manager.task_registry.keys()))
 
     # Run the async worker
     try:
-        asyncio.run(
-            run_worker(
-                manager,
-                args.workers,
-                args.concurrency,
-                args.guarantee,
-            )
-        )
+        asyncio.run(run_worker(manager, worker_count, args.concurrency, args.guarantee, execution_mode))
     except KeyboardInterrupt:
-        logger.info("Interrupted by user")
+        logger.info("interrupted by user")
     except Exception as e:
-        logger.exception("Worker failed: {}", e)
+        logger.exception("worker failed: {}", e)
         sys.exit(1)

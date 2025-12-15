@@ -67,7 +67,7 @@ class Callback(ABC):
     @property
     def manager(self) -> QManager:
         if self._manager is None:
-            raise RuntimeError("Callback not bound to manager")
+            raise RuntimeError("callback not bound to manager")
         return self._manager
 
 
@@ -80,8 +80,8 @@ def on_event(
     def decorator(callback_cls: type[Callback]) -> type[Callback]:
         original_init = callback_cls.__init__
 
-        def new_init(self: Callback, *args: Any, **kwargs: Any) -> None:
-            original_init(self, *args, **kwargs)
+        def new_init(self: Callback) -> None:
+            original_init(self)
             rule = CallbackRule(
                 event_types=set(event_types) if event_types else None,
                 task_names=task_names,

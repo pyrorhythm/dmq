@@ -1,18 +1,32 @@
-import msgspec
+from types import NoneType
+from typing import Self
 
-from ..types import TaskMessage
+import msgspec
 
 
 class MsgpackSerializer:
-    _encoder = msgspec.msgpack.Encoder()
-    _decoder = msgspec.msgpack.Decoder(TaskMessage)
+    _primary_type: type | NoneType = NoneType
 
     @classmethod
-    def serialize(cls, data: TaskMessage) -> bytes:
-        """Serialize TaskMessage to msgpack bytes."""
-        return cls._encoder.encode(data)
+    def with_type(cls, _type: type) -> Self:
+        inst = cls()
+        inst._primary_type = _type
 
-    @classmethod
-    def deserialize(cls, data: bytes) -> TaskMessage:
-        """Deserialize msgpack bytes to TaskMessage."""
-        return cls._decoder.decode(data)
+        return inst
+
+    def serialize[T](self, data: T) -> bytes:
+        return msgspec.msgpack.Encoder().encode(data)
+
+    def deserialize[T](self, data: bytes, into: type | NoneType = NoneType) -> T:
+        if self._primary_type is NoneType and into is NoneType:
+            raise ValueError("unknown type to decode")
+
+        return msgspec.msgpack.Decoder(into or self._primary_type).decode(data)
+
+
+class MsgpackJsonSerializer:
+    def serialize[T](self, data: T) -> bytes:
+        return msgspec.msgpack.Encoder().encode(data)
+
+    def deserialize[T](self, data: bytes, into: type | NoneType = NoneType) -> T:
+        return msgspec.json.decode(data)

@@ -1,21 +1,12 @@
-import importlib
 from typing import Any
 
-try:
-    orj = importlib.import_module("orjson")
-except ImportError:
-    orj = None
+from msgspec.inspect import NoneType
+from msgspec.json import decode, encode
 
 
 class JsonSerializer:
-    @staticmethod
-    def serialize(data: Any) -> bytes:
-        if orj is None:
-            raise ImportError("orjson is required for JsonSerializer. Install with: pip install dmq[orjson]")
-        return orj.dumps(data)
+    def serialize(self, data: Any) -> bytes:
+        return encode(data)
 
-    @staticmethod
-    def deserialize(self, data: bytes) -> Any:
-        if orj is None:
-            raise ImportError("orjson is required for JsonSerializer. Install with: pip install dmq[orjson]")
-        return orj.loads(data)
+    def deserialize(self, data: bytes, into: type | NoneType = NoneType) -> Any:
+        return decode(data)

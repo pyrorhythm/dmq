@@ -21,7 +21,7 @@ class DeliveryConfig:
         self.idempotency_ttl = idempotency_ttl
 
         if guarantee == DeliveryGuarantee.EXACTLY_ONCE and not enable_idempotency:
-            raise ValueError("EXACTLY_ONCE guarantee requires enable_idempotency=True")
+            raise ValueError("exactly_once guarantee requires enable_idempotency=true")
 
     def should_ack_before_processing(self) -> bool:
         return self.guarantee == DeliveryGuarantee.AT_MOST_ONCE
