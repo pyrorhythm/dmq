@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import asyncio
+import weakref
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Never
 
 import redis.asyncio as redis
 
 from ..partitioning import HashPartitionStrategy, PartitionStrategy
-from ..serializers import MsgpackSerializer  # ty:ignore[possibly-missing-import]
+from ..serializers import MsgpackSerializer
 from ..topic import TopicConfig
 from ..types import TaskMessage
 
@@ -22,10 +24,21 @@ class RedisPubSubBroker:
         partition_strategy: PartitionStrategy | None = None,
         serializer: QSerializerProtocol | None = None,
     ) -> None:
-        self.redis = redis.from_url(redis_url)
+        self._redis_url = redis_url
+        self._clients: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, redis.Redis] = (
+            weakref.WeakKeyDictionary()
+        )
         self.topics = topics or {}
         self.partition_strategy = partition_strategy or HashPartitionStrategy()
-        self.serializer = serializer or MsgpackSerializer.with_type(TaskMessage)
+        self.serializer = serializer or MsgpackSerializer()
+
+    @property
+    def redis(self) -> redis.Redis:  # type: ignore[type-arg]
+        """Get Redis client for the current event loop."""
+        loop = asyncio.get_running_loop()
+        if loop not in self._clients:
+            self._clients[loop] = redis.from_url(self._redis_url)
+        return self._clients[loop]
 
     async def create_topic(self, config: TopicConfig) -> None:
         self.topics[config.name] = config
@@ -62,7 +75,7 @@ class RedisPubSubBroker:
 
         async for message in pubsub.listen():
             if message["type"] == "message":
-                task_message = self.serializer.deserialize(message["data"])
+                task_message = self.serializer.deserialize(message["data"], into=TaskMessage)
                 yield task_message
 
     async def consume_tasks(self, callback) -> Never:

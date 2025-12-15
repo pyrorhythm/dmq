@@ -39,8 +39,8 @@ class QInProgressTask(msgspec.Struct, frozen=True):
     _id: str
     _manager: QManager
 
-    async def result(self, timeout: float = 1.0, blocking: bool = False) -> Any:
-        return await self._manager.result_backend.get_result(self._id, timeout if not blocking else None)
+    async def result(self, timeout: float = 1.0, nonblocking: bool = False) -> Any:
+        return await self._manager.result_backend.get_result(self._id, timeout if not nonblocking else None)
 
     @property
     def id(self) -> str:

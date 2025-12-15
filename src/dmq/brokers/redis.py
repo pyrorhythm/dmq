@@ -11,7 +11,7 @@ import redis.asyncio as redis
 from loguru import logger
 from ulid import ulid
 
-from dmq.serializers import JsonSerializer
+from dmq.serializers.msgpack import MsgpackSerializer
 
 from ..types import CronSchedule, DelaySchedule, ETASchedule, Schedule, TaskMessage
 
@@ -41,7 +41,7 @@ class RedisBroker:
         self.poll_interval = poll_interval
         self._running = True
         self._scheduler_task: asyncio.Task | None = None
-        self.serializer = serializer or JsonSerializer()
+        self.serializer = (serializer or MsgpackSerializer())
 
     @property
     def redis(self) -> redis.Redis:
@@ -60,7 +60,7 @@ class RedisBroker:
         message = TaskMessage(task_id=task_id, task_name=task_name, args=args, kwargs=kwargs, options=options)
 
         data = self.serializer.serialize(message)
-        await self.redis.lpush(self.queue_name, data)
+        await self.redis.lpush(self.queue_name, data) # pyrefly: ignore[not-async]
         logger.debug("task {} queued to redis: {}", task_id, task_name)
 
         return task_id
@@ -105,10 +105,10 @@ class RedisBroker:
                 due_tasks = await self.redis.zrangebyscore(self.scheduled_queue, min=0, max=now)
 
                 for task_data in due_tasks:
-                    await self.redis.lpush(self.queue_name, task_data)
-                    await self.redis.zrem(self.scheduled_queue, task_data)
+                    await self.redis.lpush(self.queue_name, task_data)  # pyrefly: ignore[not-async]
+                    await self.redis.zrem(self.scheduled_queue, task_data)  # pyrefly: ignore[not-async]
 
-                    message = self.serializer.deserialize(task_data)
+                    message = self.serializer.deserialize(task_data, into=TaskMessage)
                     logger.debug("scheduled task {} ready for execution", message.task_id)
 
             except asyncio.CancelledError:
@@ -122,7 +122,7 @@ class RedisBroker:
         while self._running:
             try:
                 logger.debug("trying to consume message...")
-                result = await self.redis.brpop(self.queue_name, timeout=1)
+                result = await self.redis.brpop([self.queue_name], timeout=1)  # pyrefly: ignore[not-async]
 
                 if result is None:
                     logger.debug("trying to consume message... failure")
@@ -130,7 +130,7 @@ class RedisBroker:
 
                 _, data = result
                 logger.debug("trying to consume message... success; got {}", data)
-                message = self.serializer.deserialize(data)
+                message = self.serializer.deserialize(data, into=TaskMessage)
                 logger.debug("yielding message... {}", message)
                 yield message
                 logger.debug("yielding message; success!")
@@ -165,13 +165,13 @@ class RedisBroker:
 
     async def health_check(self) -> bool:
         try:
-            await self.redis.ping()
+            await self.redis.ping()  # pyrefly: ignore[not-async]
             return True
         except Exception:
             return False
 
     async def queue_length(self) -> int:
-        return await self.redis.llen(self.queue_name)
+        return await self.redis.llen(self.queue_name)  # pyrefly: ignore[not-async]
 
     async def scheduled_count(self) -> int:
         return await self.redis.zcard(self.scheduled_queue)
