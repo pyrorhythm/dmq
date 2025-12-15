@@ -133,8 +133,7 @@ class QWorkerPool:
         else:
             async_workers = cast(list[QWorker], self.workers)
             self._worker_tasks = [
-                asyncio.create_task(worker.start(), name=f"worker-{worker.worker_id}")
-                for worker in async_workers
+                asyncio.create_task(worker.start(), name=f"worker-{worker.worker_id}") for worker in async_workers
             ]
 
             await asyncio.gather(*[worker.wait_started() for worker in async_workers])

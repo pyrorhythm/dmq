@@ -22,10 +22,6 @@ class UserEventEmitter:
 
     async def emit(self, event_name: str, **data: Any) -> None:
         event = UserEvent(
-            event_name=event_name,
-            task_id=self._task_id,
-            task_name=self._task_name,
-            timestamp=time.time(),
-            data=data,
+            event_name=event_name, task_id=self._task_id, task_name=self._task_name, timestamp=time.time(), data=data
         )
         await self._event_router.emit(event)

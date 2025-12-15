@@ -76,11 +76,7 @@ def import_from_modules(modules: list[str]) -> None:
             logger.exception(err)
 
 
-def import_tasks(
-    modules: list[str],
-    pattern: str | Sequence[str],
-    fs_discover: bool,
-) -> None:
+def import_tasks(modules: list[str], pattern: str | Sequence[str], fs_discover: bool) -> None:
     """
     @ from github.com/taskiq/taskiq
 
@@ -104,9 +100,7 @@ def import_tasks(
                     if path.suffix in (".py", ".pyc", ".pyd", ".so"):
                         # remove all suffixes
                         prefix = path.name.partition(".")[0]
-                        discovered_modules.add(
-                            str(path.with_name(prefix)).replace(os.path.sep, "."),
-                        )
+                        discovered_modules.add(str(path.with_name(prefix)).replace(os.path.sep, "."))
                     # ignore other files
                 else:
                     discovered_modules.add(str(path).replace(os.path.sep, "."))

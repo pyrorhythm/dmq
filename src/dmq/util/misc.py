@@ -12,9 +12,7 @@ def _object_fqn(obj: object) -> str:
     return f"{obj.__module__}.{obj.__class__.__name__}"
 
 
-async def await_if_async[T](
-    arg: T | Awaitable[T] | Coroutine[Any, Any, T] | CoroutineType[Any, Any, T],
-) -> T:
+async def await_if_async[T](arg: T | Awaitable[T] | Coroutine[Any, Any, T] | CoroutineType[Any, Any, T]) -> T:
     to_return: T
 
     if iscoroutine(arg):

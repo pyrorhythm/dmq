@@ -29,6 +29,7 @@ class QEventBase(msgspec.Struct, frozen=True):
 
     event_type: QEventType = QEventType.UNKNOWN
 
+
 class QTaskQueued(msgspec.Struct, frozen=True):
     task_id: str
     task_name: str
@@ -38,6 +39,7 @@ class QTaskQueued(msgspec.Struct, frozen=True):
 
     event_type: QEventType = QEventType.TASK_QUEUED
 
+
 class QTaskStarted(msgspec.Struct, frozen=True):
     task_id: str
     task_name: str
@@ -45,6 +47,7 @@ class QTaskStarted(msgspec.Struct, frozen=True):
     worker_id: str | None = None
 
     event_type: QEventType = QEventType.TASK_STARTED
+
 
 class QTaskCompleted(msgspec.Struct, frozen=True):
     task_id: str
@@ -54,6 +57,7 @@ class QTaskCompleted(msgspec.Struct, frozen=True):
     result: Any = None
 
     event_type: QEventType = QEventType.TASK_COMPLETED
+
 
 class QTaskFailed(msgspec.Struct, frozen=True):
     task_id: str
@@ -65,6 +69,7 @@ class QTaskFailed(msgspec.Struct, frozen=True):
 
     event_type: QEventType = QEventType.TASK_FAILED
 
+
 class QTaskRetry(msgspec.Struct, frozen=True):
     task_id: str
     task_name: str
@@ -75,11 +80,13 @@ class QTaskRetry(msgspec.Struct, frozen=True):
 
     event_type: QEventType = QEventType.TASK_RETRY
 
+
 class QTaskNotFound(msgspec.Struct, frozen=True):
     task_id: str
     task_name: str
     timestamp: float
 
     event_type: QEventType = QEventType.TASK_NOT_FOUND
+
 
 type QEvent = QEventBase | QTaskQueued | QTaskStarted | QTaskCompleted | QTaskFailed | QTaskRetry | QTaskNotFound

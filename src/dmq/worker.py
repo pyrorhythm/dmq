@@ -10,12 +10,7 @@ from loguru import logger
 
 from dmq.events import _task_not_found_event
 
-from .events import (
-    _task_completed_event,
-    _task_failure_event,
-    _task_retry_event,
-    _task_started_event,
-)
+from .events import _task_completed_event, _task_failure_event, _task_retry_event, _task_started_event
 from .guarantees import DeliveryConfig, IdempotencyStore
 from .task import QTask
 from .types import TaskMessage
@@ -67,11 +62,7 @@ class QWorker:
         self._semaphore = asyncio.Semaphore(self.max_concurrent_tasks)
         self._pending_tasks = set()
 
-        logger.info(
-            "worker {} started",
-            self.worker_id,
-            self.max_concurrent_tasks,
-        )
+        logger.info("worker {} started", self.worker_id, self.max_concurrent_tasks)
 
         self._process_task = asyncio.create_task(self._process_loop())
         self._started.set()
@@ -94,11 +85,7 @@ class QWorker:
         if self._pending_tasks:
             active = [t for t in self._pending_tasks if not t.done()]
             if active:
-                logger.info(
-                    "worker {} waiting for {} pending tasks",
-                    self.worker_id,
-                    len(active),
-                )
+                logger.info("worker {} waiting for {} pending tasks", self.worker_id, len(active))
                 await asyncio.gather(*active, return_exceptions=True)
 
         logger.info("worker {} stopped", self.worker_id)
@@ -155,7 +142,7 @@ class QWorker:
 
             try:
                 result = await await_if_async(
-                    task.original_func(*message.args, **message.kwargs) # pyrefly: ignore[invalid-param-spec]
+                    task.original_func(*message.args, **message.kwargs)  # pyrefly: ignore[invalid-param-spec]
                 )
             finally:
                 QTask.set_emitter(None)
@@ -174,12 +161,7 @@ class QWorker:
             if self.delivery_config.should_ack_after_processing():
                 await self.manager.broker.ack_task(message.task_id)
 
-            logger.debug(
-                "worker {} completed task {} in {:.3f}s",
-                self.worker_id,
-                message.task_id,
-                duration,
-            )
+            logger.debug("worker {} completed task {} in {:.3f}s", self.worker_id, message.task_id, duration)
 
         except Exception as e:
             await self._handle_task_failure(message, e, start_time)
@@ -187,12 +169,7 @@ class QWorker:
     async def _handle_task_failure(self, message: TaskMessage, exception: Exception, start_time: float) -> None:
         tb = traceback.format_exc()
 
-        logger.warning(
-            "worker {} task {} failed: {}",
-            self.worker_id,
-            message.task_id,
-            exception,
-        )
+        logger.warning("worker {} task {} failed: {}", self.worker_id, message.task_id, exception)
 
         if message.retry_count < message.max_retries:
             retry_event = _task_retry_event(message)

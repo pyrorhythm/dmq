@@ -25,9 +25,7 @@ class RedisPubSubBroker:
         serializer: QSerializerProtocol | None = None,
     ) -> None:
         self._redis_url = redis_url
-        self._clients: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, redis.Redis] = (
-            weakref.WeakKeyDictionary()
-        )
+        self._clients: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, redis.Redis] = weakref.WeakKeyDictionary()
         self.topics = topics or {}
         self.partition_strategy = partition_strategy or HashPartitionStrategy()
         self.serializer = serializer or MsgpackSerializer()
@@ -92,7 +90,7 @@ class RedisPubSubBroker:
 
     async def health_check(self) -> bool:
         try:
-            await self.redis.ping() # pyrefly: ignore[not-async]
+            await self.redis.ping()  # pyrefly: ignore[not-async]
             return True
         except Exception:
             return False

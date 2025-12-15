@@ -20,44 +20,21 @@ class InMemoryBroker:
         self._max_concurrent = max_concurrent_per_consumer
 
     async def send_task(
-        self,
-        task_name: str,
-        args: tuple,
-        kwargs: dict,
-        options: dict,
-        task_id: str | None = None,
+        self, task_name: str, args: tuple, kwargs: dict, options: dict, task_id: str | None = None
     ) -> str:
         if task_id is None:
             task_id = str(ulid())
-        message = TaskMessage(
-            task_id=task_id,
-            task_name=task_name,
-            args=args,
-            kwargs=kwargs,
-            options=options,
-        )
+        message = TaskMessage(task_id=task_id, task_name=task_name, args=args, kwargs=kwargs, options=options)
         await self._task_queue.put(message)
         logger.debug("task {} queued: {}", task_id, task_name)
         return task_id
 
     async def send_scheduled_task(
-        self,
-        task_name: str,
-        args: tuple,
-        kwargs: dict,
-        schedule: Schedule,
-        options: dict,
-        task_id: str | None = None,
+        self, task_name: str, args: tuple, kwargs: dict, schedule: Schedule, options: dict, task_id: str | None = None
     ) -> str:
         if task_id is None:
             task_id = str(ulid())
-        message = TaskMessage(
-            task_id=task_id,
-            task_name=task_name,
-            args=args,
-            kwargs=kwargs,
-            options=options,
-        )
+        message = TaskMessage(task_id=task_id, task_name=task_name, args=args, kwargs=kwargs, options=options)
 
         execute_at = self._calculate_execute_time(schedule)
         await self._scheduled_queue.put((execute_at, message))
@@ -76,8 +53,7 @@ class InMemoryBroker:
             case ETASchedule(eta=eta):
                 return eta.timestamp()
             case CronSchedule(cron_expr=_):
-                raise NotImplementedError("cron scheduling not yet implemented in in-memory "
-										  "broker")
+                raise NotImplementedError("cron scheduling not yet implemented in in-memory broker")
             case _:
                 raise NotImplementedError("unknown schedule")
 
@@ -113,10 +89,7 @@ class InMemoryBroker:
             except TimeoutError:
                 continue
 
-    async def consume_tasks(
-        self,
-        callback: Callable[[TaskMessage], Awaitable[None]],
-    ) -> None:
+    async def consume_tasks(self, callback: Callable[[TaskMessage], Awaitable[None]]) -> None:
         semaphore = asyncio.Semaphore(self._max_concurrent)
         pending_tasks: set[asyncio.Task] = set()
 

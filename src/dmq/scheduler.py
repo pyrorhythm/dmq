@@ -26,10 +26,7 @@ class QScheduler:
         self._running = False
 
     async def schedule(
-        self,
-        task: Callable[[], Awaitable[Any]],
-        delay: float = 0.0,
-        task_id: str | None = None,
+        self, task: Callable[[], Awaitable[Any]], delay: float = 0.0, task_id: str | None = None
     ) -> None:
         execute_at = time.time() + delay
         scheduled = ScheduledTask(execute_at=execute_at, task=task, task_id=task_id or f"task-{id(task)}")

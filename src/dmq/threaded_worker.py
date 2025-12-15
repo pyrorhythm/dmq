@@ -219,7 +219,7 @@ class QThreadedWorker:
 
             try:
                 result = await await_if_async(
-                    task.original_func(*message.args, **message.kwargs) # pyrefly: ignore[invalid-param-spec]
+                    task.original_func(*message.args, **message.kwargs)  # pyrefly: ignore[invalid-param-spec]
                 )
             finally:
                 QTask.set_emitter(None)

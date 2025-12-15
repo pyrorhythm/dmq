@@ -6,30 +6,16 @@ from ..types import Schedule, TaskMessage
 
 class QBrokerProtocol(Protocol):
     async def send_task(
-        self,
-        task_name: str,
-        args: tuple,
-        kwargs: dict,
-        options: dict,
-        task_id: str | None = None,
+        self, task_name: str, args: tuple, kwargs: dict, options: dict, task_id: str | None = None
     ) -> str: ...
 
     async def send_scheduled_task(
-        self,
-        task_name: str,
-        args: tuple,
-        kwargs: dict,
-        schedule: Schedule,
-        options: dict,
-        task_id: str | None = None,
+        self, task_name: str, args: tuple, kwargs: dict, schedule: Schedule, options: dict, task_id: str | None = None
     ) -> str: ...
 
     def consume(self) -> AsyncIterator[TaskMessage]: ...
 
-    async def consume_tasks(
-        self,
-        callback: Callable[[TaskMessage], Awaitable[None]],
-    ) -> None: ...
+    async def consume_tasks(self, callback: Callable[[TaskMessage], Awaitable[None]]) -> None: ...
 
     async def ack_task(self, task_id: str) -> None: ...
 

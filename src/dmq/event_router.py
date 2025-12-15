@@ -13,12 +13,12 @@ if TYPE_CHECKING:
 class EventRouter:
     def __init__(self) -> None:
         self._callbacks: list[Callback] = []
-        self._event_queues: weakref.WeakKeyDictionary[
-            asyncio.AbstractEventLoop, asyncio.Queue[QEvent]
-        ] = weakref.WeakKeyDictionary()
-        self._listener_tasks: weakref.WeakKeyDictionary[
-            asyncio.AbstractEventLoop, asyncio.Task
-        ] = weakref.WeakKeyDictionary()
+        self._event_queues: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Queue[QEvent]] = (
+            weakref.WeakKeyDictionary()
+        )
+        self._listener_tasks: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Task] = (
+            weakref.WeakKeyDictionary()
+        )
 
     def _get_queue(self) -> asyncio.Queue[QEvent]:
         """Get event queue for the current event loop."""

@@ -41,7 +41,7 @@ class RedisBroker:
         self.poll_interval = poll_interval
         self._running = True
         self._scheduler_task: asyncio.Task | None = None
-        self.serializer = (serializer or MsgpackSerializer())
+        self.serializer = serializer or MsgpackSerializer()
 
     @property
     def redis(self) -> redis.Redis:
@@ -60,7 +60,7 @@ class RedisBroker:
         message = TaskMessage(task_id=task_id, task_name=task_name, args=args, kwargs=kwargs, options=options)
 
         data = self.serializer.serialize(message)
-        await self.redis.lpush(self.queue_name, data) # pyrefly: ignore[not-async]
+        await self.redis.lpush(self.queue_name, data)  # pyrefly: ignore[not-async]
         logger.debug("task {} queued to redis: {}", task_id, task_name)
 
         return task_id

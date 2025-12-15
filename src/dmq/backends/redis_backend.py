@@ -25,11 +25,7 @@ def _get_type_from_fqn(_result: bytes | None) -> Any | None:
     try:
         with add_cwd_in_path():
             _module = importlib.import_module(_type_module_fqn)
-            _imported_type = getattr(
-                _module,
-                _type_name,
-                None
-                )
+            _imported_type = getattr(_module, _type_name, None)
     except Exception as exc:
         logger.warning("{}", exc)
 
@@ -75,15 +71,14 @@ class RedisResultBackend:
         if self.type_serialization:
             _type = _get_type_fqn(result)
             if _type is None:
-                logger.warning("type_serialization is True but failed to get type FQN of {}, "
-                               "serializing as builtins.str",
-                               result)
+                logger.warning(
+                    "type_serialization is True but failed to get type FQN of {}, serializing as builtins.str", result
+                )
                 _type = "builtins|str"
 
             await self.redis.setex(key + ":type", ttl or self.default_ttl, _type)
 
         await self.redis.publish(f"sotq:result:ready:{task_id}", "ready")
-
 
     async def get_result(self, task_id: str, timeout: float | None = None) -> Any:
         key = f"sotq:result:{task_id}"
