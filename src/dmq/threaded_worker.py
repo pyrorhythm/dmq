@@ -218,7 +218,9 @@ class QThreadedWorker:
             QTask.set_emitter(emitter)
 
             try:
-                result = await await_if_async(task.original_func(*message.args, **message.kwargs))
+                result = await await_if_async(
+                    task.original_func(*message.args, **message.kwargs) # pyrefly: ignore[invalid-param-spec]
+                )
             finally:
                 QTask.set_emitter(None)
 
@@ -239,9 +241,9 @@ class QThreadedWorker:
             logger.debug("worker {} completed task {} in {:.3f}s", self.worker_id, message.task_id, duration)
 
         except Exception as e:
-            await self._handle_task_failure(message, e, start_time)
+            await self._handle_task_failure(message, e)
 
-    async def _handle_task_failure(self, message: TaskMessage, exception: Exception, start_time: float) -> None:
+    async def _handle_task_failure(self, message: TaskMessage, exception: Exception) -> None:
         logger.warning("worker {} task {} failed: {}", self.worker_id, message.task_id, exception)
         logger.debug("{}", traceback.format_exception(type(exception), exception, exception.__traceback__))
 

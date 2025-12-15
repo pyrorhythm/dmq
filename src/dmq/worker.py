@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
+from dmq.events import _task_not_found_event
+
 from .events import (
     _task_completed_event,
     _task_failure_event,
@@ -142,11 +144,19 @@ class QWorker:
         try:
             task = self.manager.get_task(message.task_name)
 
+            if task is None:
+                nf_event = _task_not_found_event(message)
+                await self.manager.event_router.emit(nf_event)
+                logger.warning("task nf")
+                return
+
             emitter = UserEventEmitter(message.task_id, message.task_name, self.manager.event_router)
             QTask.set_emitter(emitter)
 
             try:
-                result = await await_if_async(task.original_func(*message.args, **message.kwargs))
+                result = await await_if_async(
+                    task.original_func(*message.args, **message.kwargs) # pyrefly: ignore[invalid-param-spec]
+                )
             finally:
                 QTask.set_emitter(None)
 

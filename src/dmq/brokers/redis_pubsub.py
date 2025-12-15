@@ -92,7 +92,7 @@ class RedisPubSubBroker:
 
     async def health_check(self) -> bool:
         try:
-            await self.redis.ping()
+            await self.redis.ping() # pyrefly: ignore[not-async]
             return True
         except Exception:
             return False

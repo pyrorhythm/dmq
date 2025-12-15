@@ -28,12 +28,10 @@ class EventRouter:
         return self._event_queues[loop]
 
     def _get_listener_task(self) -> asyncio.Task | None:
-        """Get listener task for the current event loop."""
         loop = asyncio.get_running_loop()
         return self._listener_tasks.get(loop)
 
     def _set_listener_task(self, task: asyncio.Task) -> None:
-        """Set listener task for the current event loop."""
         loop = asyncio.get_running_loop()
         self._listener_tasks[loop] = task
 
@@ -67,5 +65,6 @@ class EventRouter:
             await asyncio.gather(*tasks, return_exceptions=True)
 
     async def shutdown(self) -> None:
-        if self._listener_task and not self._listener_task.done():
-            await self._listener_task
+        _listener_task = self._get_listener_task()
+        if _listener_task and not _listener_task.done():
+            await _listener_task
