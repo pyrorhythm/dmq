@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import asyncio
-import weakref
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Never
 
 import redis.asyncio as redis
+from ulid import ulid
+
+from dmq.util.redis_client import RedisClientManager
 
 from ..partitioning import HashPartitionStrategy, PartitionStrategy
 from ..serializers import MsgpackSerializer
@@ -24,26 +25,19 @@ class RedisPubSubBroker:
         partition_strategy: PartitionStrategy | None = None,
         serializer: QSerializerProtocol | None = None,
     ) -> None:
-        self._redis_url = redis_url
-        self._clients: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, redis.Redis] = weakref.WeakKeyDictionary()
+        self._redis_manager = RedisClientManager(redis_url)
         self.topics = topics or {}
         self.partition_strategy = partition_strategy or HashPartitionStrategy()
         self.serializer = serializer or MsgpackSerializer()
 
     @property
     def redis(self) -> redis.Redis:  # type: ignore[type-arg]
-        """Get Redis client for the current event loop."""
-        loop = asyncio.get_running_loop()
-        if loop not in self._clients:
-            self._clients[loop] = redis.from_url(self._redis_url)
-        return self._clients[loop]
+        return self._redis_manager.client()
 
     async def create_topic(self, config: TopicConfig) -> None:
         self.topics[config.name] = config
 
     async def send_task(self, task_name: str, args: tuple, kwargs: dict, options: dict) -> str:
-        from ulid import ulid
-
         task_id = str(ulid())
 
         message = TaskMessage(task_id=task_id, task_name=task_name, args=args, kwargs=kwargs, options=options)

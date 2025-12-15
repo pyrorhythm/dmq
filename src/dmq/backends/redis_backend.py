@@ -1,35 +1,17 @@
 from __future__ import annotations
 
 import asyncio
-import importlib
-import weakref
 from typing import TYPE_CHECKING, Any
 
 import redis.asyncio as redis
 from loguru import logger
 
-from dmq.cli.utils import add_cwd_in_path
 from dmq.serializers.msgpack import MsgpackSerializer
-from dmq.util.misc import _get_type_fqn
+from dmq.util.misc import _get_type_fqn, _get_type_from_fqn
+from dmq.util.redis_client import RedisClientManager
 
 if TYPE_CHECKING:
     from ..abc.serializer import QSerializerProtocol
-
-
-def _get_type_from_fqn(_result: bytes | None) -> Any | None:
-    _imported_type = None
-    if _result is None:
-        return _imported_type
-
-    _type_module_fqn, _type_name = _result.decode().split("|")
-    try:
-        with add_cwd_in_path():
-            _module = importlib.import_module(_type_module_fqn)
-            _imported_type = getattr(_module, _type_name, None)
-    except Exception as exc:
-        logger.warning("{}", exc)
-
-    return _imported_type
 
 
 class RedisResultBackend:
@@ -50,18 +32,14 @@ class RedisResultBackend:
         requires worker and client to be in 1 working directory to correctly resolve FQN's
 
         """
-        self._redis_url = redis_url
-        self._clients: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, redis.Redis] = weakref.WeakKeyDictionary()
+        self._redis_manager = RedisClientManager(redis_url)
         self.default_ttl = default_ttl
         self.serializer: QSerializerProtocol = serializer or MsgpackSerializer()
         self.type_serialization = type_serialization
 
     @property
     def redis(self) -> redis.Redis:
-        loop = asyncio.get_running_loop()
-        if loop not in self._clients:
-            self._clients[loop] = redis.from_url(self._redis_url)
-        return self._clients[loop]
+        return self._redis_manager.client()
 
     async def store_result(self, task_id: str, result: Any, ttl: int | None = None) -> None:
         key = f"sotq:result:{task_id}"
@@ -71,10 +49,10 @@ class RedisResultBackend:
         if self.type_serialization:
             _type = _get_type_fqn(result)
             if _type is None:
-                logger.warning(
-                    "type_serialization is True but failed to get type FQN of {}, serializing as builtins.str", result
-                )
-                _type = "builtins|str"
+                logger.warning("type_serialization is True but failed to get type FQN of {}, "
+                               "serializing as builtins:str",
+                               result)
+                _type = "builtins:str"
 
             await self.redis.setex(key + ":type", ttl or self.default_ttl, _type)
 
@@ -111,8 +89,7 @@ class RedisResultBackend:
 
         if data is not None:
             _result = await self.redis.get(key + ":type")
-            _imported_type = _get_type_from_fqn(_result)
-            _deser = self.serializer.deserialize(data, into=_imported_type)
+            _deser = self.serializer.deserialize(data, into=_get_type_from_fqn(_result))
 
         return _deser
 

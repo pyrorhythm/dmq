@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 from ulid import ulid
 
+from dmq.util.misc import await_if_async
+
 from .events import QEventType, QTaskQueued
 from .types import CronSchedule, DelaySchedule, ETASchedule, QInProgressTask
 from .user_event import UserEventEmitter
@@ -37,17 +39,17 @@ class QTask[**Param, ReturnType]:
         self.manager: QManager = manager
         self.return_type: type[ReturnType] | None = return_type
 
-        new_name = f"{self.original_func.__name__}_org_dq"  # ty: ignore
-        self.original_func.__name__ = new_name  # ty: ignore
+        new_name = f"{self.original_func.__name__}_org_dq"
+        self.original_func.__name__ = new_name
         if hasattr(self.original_func, "__qualname__"):
-            original_qualname = self.original_func.__qualname__.rsplit(".")  # ty: ignore
+            original_qualname = self.original_func.__qualname__.rsplit(".")
             original_qualname[-1] = new_name
             new_qualname = ".".join(original_qualname)
-            self.original_func.__qualname__ = new_qualname  # ty: ignore
+            self.original_func.__qualname__ = new_qualname
         setattr(sys.modules[original_func.__module__], new_name, original_func)
 
     async def __call__(self, *args: Param.args, **kwargs: Param.kwargs) -> ReturnType:
-        return await self.original_func(*args, **kwargs)  # type: ignore
+        return await await_if_async(self.original_func(*args, **kwargs))  # pyrefly: ignore[ignore-param-spec]
 
     @staticmethod
     def e() -> UserEventEmitter:

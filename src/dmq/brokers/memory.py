@@ -6,7 +6,9 @@ from datetime import UTC, datetime
 from loguru import logger
 from ulid import ulid
 
-from ..types import CronSchedule, DelaySchedule, ETASchedule, Schedule, TaskMessage
+from dmq.util.scheduling import calculate_execute_time
+
+from ..types import Schedule, TaskMessage
 
 
 class InMemoryBroker:
@@ -36,26 +38,13 @@ class InMemoryBroker:
             task_id = str(ulid())
         message = TaskMessage(task_id=task_id, task_name=task_name, args=args, kwargs=kwargs, options=options)
 
-        execute_at = self._calculate_execute_time(schedule)
+        execute_at = calculate_execute_time(schedule)
         await self._scheduled_queue.put((execute_at, message))
 
         if self._scheduler_task is None or self._scheduler_task.done():
             self._scheduler_task = asyncio.create_task(self._process_scheduled_tasks())
 
         return task_id
-
-    def _calculate_execute_time(self, schedule: Schedule) -> float:
-        now = datetime.now(UTC).timestamp()
-
-        match schedule:
-            case DelaySchedule(delay_seconds=delay):
-                return now + delay
-            case ETASchedule(eta=eta):
-                return eta.timestamp()
-            case CronSchedule(cron_expr=_):
-                raise NotImplementedError("cron scheduling not yet implemented in in-memory broker")
-            case _:
-                raise NotImplementedError("unknown schedule")
 
     async def _process_scheduled_tasks(self) -> None:
         while self._running:

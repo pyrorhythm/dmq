@@ -1,5 +1,3 @@
-"""Runtime detection for execution mode selection."""
-
 from __future__ import annotations
 
 import os

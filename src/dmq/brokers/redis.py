@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import weakref
 from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -12,8 +11,10 @@ from loguru import logger
 from ulid import ulid
 
 from dmq.serializers.msgpack import MsgpackSerializer
+from dmq.util.redis_client import RedisClientManager
+from dmq.util.scheduling import calculate_execute_time
 
-from ..types import CronSchedule, DelaySchedule, ETASchedule, Schedule, TaskMessage
+from ..types import Schedule, TaskMessage
 
 if TYPE_CHECKING:
     from ..abc.serializer import QSerializerProtocol
@@ -34,8 +35,7 @@ class RedisBroker:
         serializer: QSerializerProtocol | None = None,
         poll_interval: float = 1.0,
     ) -> None:
-        self._redis_url = redis_url
-        self._clients: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, redis.Redis] = weakref.WeakKeyDictionary()
+        self._redis_manager = RedisClientManager(redis_url)
         self.queue_name = queue_name
         self.scheduled_queue = scheduled_queue
         self.poll_interval = poll_interval
@@ -45,11 +45,7 @@ class RedisBroker:
 
     @property
     def redis(self) -> redis.Redis:
-        """Get Redis client for the current event loop."""
-        loop = asyncio.get_running_loop()
-        if loop not in self._clients:
-            self._clients[loop] = redis.from_url(self._redis_url, decode_responses=False)
-        return self._clients[loop]
+        return self._redis_manager.client()
 
     async def send_task(
         self, task_name: str, args: tuple, kwargs: dict, options: dict, task_id: str | None = None
@@ -73,7 +69,7 @@ class RedisBroker:
 
         message = TaskMessage(task_id=task_id, task_name=task_name, args=args, kwargs=kwargs, options=options)
 
-        execute_at = self._calculate_execute_time(schedule)
+        execute_at = calculate_execute_time(schedule)
         data = self.serializer.serialize(message)
 
         await self.redis.zadd(self.scheduled_queue, {data: execute_at})
@@ -83,19 +79,6 @@ class RedisBroker:
             self._scheduler_task = asyncio.create_task(self._process_scheduled_tasks())
 
         return task_id
-
-    def _calculate_execute_time(self, schedule: Schedule) -> float:
-        now = datetime.now(UTC).timestamp()
-
-        match schedule:
-            case DelaySchedule(delay_seconds=delay):
-                return now + delay
-            case ETASchedule(eta=eta):
-                return eta.timestamp()
-            case CronSchedule(cron_expr=_):
-                raise NotImplementedError("cron scheduling not yet implemented")
-            case _:
-                raise NotImplementedError("unknown schedule")
 
     async def _process_scheduled_tasks(self) -> None:
         while self._running:

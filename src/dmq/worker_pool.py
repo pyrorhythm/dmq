@@ -9,13 +9,14 @@ from loguru import logger
 
 from .execution_mode import ExecutionMode
 from .guarantees import DeliveryConfig
-from .threaded_worker import QThreadedWorker
 from .types import TaskMessage
-from .worker import QWorker
+from .workers import QAsyncWorker, QThreadedWorker
 
 if TYPE_CHECKING:
     from .manager import QManager
 
+
+type _Worker = QAsyncWorker | QThreadedWorker
 
 class QWorkerPool:
     def __init__(
@@ -32,7 +33,7 @@ class QWorkerPool:
         self.delivery_config = delivery_config
         self.execution_mode = execution_mode
 
-        self.workers: list[QWorker | QThreadedWorker] = []
+        self.workers: list[QAsyncWorker | QThreadedWorker] = []
         self._worker_tasks: list[asyncio.Task] = []
         self._dispatcher_task: asyncio.Task | None = None
         self._running = False
@@ -48,7 +49,7 @@ class QWorkerPool:
     def total_max_concurrent(self) -> int:
         return self.worker_count * self.max_tasks_per_worker
 
-    def _create_workers(self) -> list[QWorker | QThreadedWorker]:
+    def _create_workers(self) -> list[_Worker]:
         if self.execution_mode == ExecutionMode.THREADED:
             logger.info("creating {} threaded workers", self.worker_count)
             return [
@@ -63,7 +64,7 @@ class QWorkerPool:
 
         logger.info("creating {} async workers", self.worker_count)
         return [
-            QWorker(
+            QAsyncWorker(
                 manager=self.manager,
                 worker_id=f"worker-{i}",
                 delivery_config=self.delivery_config,
@@ -72,12 +73,12 @@ class QWorkerPool:
             for i in range(self.worker_count)
         ]
 
-    def _get_next_worker(self) -> QWorker | QThreadedWorker:
+    def _get_next_worker(self) -> _Worker:
         worker = self.workers[self._next_worker_idx]
         self._next_worker_idx = (self._next_worker_idx + 1) % len(self.workers)
         return worker
 
-    def _get_least_loaded_worker(self) -> QWorker | QThreadedWorker:
+    def _get_least_loaded_worker(self) -> _Worker:
         return min(self.workers, key=lambda w: w.load)
 
     async def _dispatch_task(self, message: TaskMessage) -> None:
@@ -91,7 +92,7 @@ class QWorkerPool:
             logger.debug("submitting task to threaded worker... success!")
         else:
             logger.debug("submitting task to async worker...")
-            worker = cast(QWorker, worker)
+            worker = cast(QAsyncWorker, worker)
             # async submit for async workers
             await worker.submit(message)  # pyrefly: ignore
 
@@ -131,7 +132,7 @@ class QWorkerPool:
             for worker in threaded_workers:
                 worker.wait_started()
         else:
-            async_workers = cast(list[QWorker], self.workers)
+            async_workers = cast(list[QAsyncWorker], self.workers)
             self._worker_tasks = [
                 asyncio.create_task(worker.start(), name=f"worker-{worker.worker_id}") for worker in async_workers
             ]
@@ -177,13 +178,11 @@ class QWorkerPool:
                 await self._dispatcher_task
 
         if self.execution_mode == ExecutionMode.THREADED:
-            # stop threaded workers
             with ThreadPoolExecutor(max_workers=len(self.workers)) as executor:
                 futures = [executor.submit(worker.stop, timeout) for worker in self.workers]  # pyrefly: ignore
-                # wait for all futures to complete
                 for future in futures:
                     try:
-                        future.result(timeout=timeout)
+                        await future.result(timeout=timeout)
                     except Exception as e:
                         logger.warning("error stopping worker: {}", e)
         else:

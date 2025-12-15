@@ -95,7 +95,7 @@ wheels = [
 
 [[package]]
 name = "dmq"
-version = "0.0.3a1"
+version = "0.0.3"
 source = { editable = "." }
 dependencies = [
     { name = "loguru" },
@@ -136,7 +136,7 @@ requires-dist = [
     { name = "redis", marker = "extra == 'redis'", specifier = ">=7" },
     { name = "ulid", specifier = ">=1.1" },
 ]
-provides-extras = ["redis", "postgres", "all-ft"]
+provides-extras = ["all-ft", "postgres", "redis"]
 
 [package.metadata.requires-dev]
 dev = [

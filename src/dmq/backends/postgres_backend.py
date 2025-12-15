@@ -2,15 +2,16 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import time
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import asyncpg
 import msgspec
 
+from dmq.util.misc import _get_type_fqn, _get_type_from_fqn
+
 if TYPE_CHECKING:
-    from ..abc.serializer import QSerializerProtocol
+    pass
 
 
 SCHEMA_SQL = """
@@ -21,6 +22,7 @@ create table if not exists dmq.task_results (
     task_id varchar(26) unique not null,
     task_name varchar(255) not null,
     result jsonb,
+    type_fqn text,
     status varchar(50) not null check (status in ('PENDING', 'SUCCESS', 'FAILED', 'RETRY')),
     created_at timestamptz default now(),
     completed_at timestamptz,
@@ -41,6 +43,30 @@ create table if not exists dmq.workflow_states (
     created_at timestamptz default now(),
     updated_at timestamptz default now()
 );
+
+create or replace function dmq.notify_task_completion()
+returns trigger as $$
+begin
+    if new.status in ('SUCCESS', 'FAILED') then
+        perform pg_notify('dmq_task_completion', new.task_id);
+    end if;
+    return new;
+end;
+$$ language plpgsql;
+
+do $$
+begin
+    if not exists (
+        select 1 from pg_trigger
+        where tgname = 'task_completion_trigger'
+        and tgrelid = 'dmq.task_results'::regclass
+    ) then
+        create trigger task_completion_trigger
+        after insert or update on dmq.task_results
+        for each row
+        execute function dmq.notify_task_completion();
+    end if;
+end $$;
 """
 
 
@@ -51,14 +77,14 @@ class RetentionPolicy(msgspec.Struct, frozen=True):
 
 class PostgresResultBackend:
     def __init__(
-        self, dsn: str, serializer: QSerializerProtocol, retention_policy: RetentionPolicy | None = None
+        self, dsn: str, retention_policy: RetentionPolicy | None = None, type_serialization: bool = False
     ) -> None:
         self._type_memory: dict[str, type] = {}
         self.dsn = dsn
         self.pool: asyncpg.Pool | None = None
         self.retention_policy = retention_policy or RetentionPolicy()
-        self.serializer = serializer
         self._cleanup_task: asyncio.Task | None = None
+        self.type_serialization = type_serialization
 
     async def connect(self) -> None:
         self.pool = await asyncpg.create_pool(self.dsn)
@@ -81,15 +107,20 @@ class PostgresResultBackend:
         async with self.pool.acquire() as conn:
             await conn.execute(SCHEMA_SQL)
 
-    async def store_result(self, task_id: str, result: Any, status: str = "success", task_name: str = "") -> None:
+    async def store_result(self, task_id: str, result: Any, status: Literal["SUCCESS", "FAILED"] = "SUCCESS", task_name: str = "") -> None:
         if self.pool is None:
             raise ConnectionError("pg pool not initialized")
 
         expires_at = None
         if self.retention_policy:
-            ttl = self.retention_policy.success_ttl if status == "success" else self.retention_policy.failed_ttl
+            ttl = self.retention_policy.success_ttl if status == "SUCCESS" else self.retention_policy.failed_ttl
             if ttl:
                 expires_at = datetime.now(UTC) + timedelta(seconds=ttl)
+
+        type_fqn = None
+
+        if self.type_serialization:
+            type_fqn = _get_type_fqn(result)
 
         result_data = msgspec.json.encode(result)
         result_json = msgspec.json.decode(result_data) if isinstance(result_data, bytes) else result_data
@@ -98,8 +129,8 @@ class PostgresResultBackend:
             await conn.execute(
                 """
                 insert into dmq.task_results
-                (task_id, task_name, result, status, completed_at, expires_at)
-                values ($1, $2, $3::jsonb, $4, $5, $6)
+                (task_id, task_name, result, type_fqn, status, completed_at, expires_at)
+                values ($1, $2, $3::jsonb, $4, $5, $6, $7)
                 on conflict (task_id)
                 do update set
                     result = excluded.result,
@@ -110,27 +141,72 @@ class PostgresResultBackend:
                 task_id,
                 task_name,
                 result_json,
+                type_fqn,
                 status,
                 datetime.now(UTC),
                 expires_at,
             )
 
-    async def get_result(self, task_id: str, timeout: float | None = None) -> Any:
-        deadline = time.time() + timeout if timeout else None
+    async def get_result(self, task_id: str, timeout: float | None = None) -> Any: # noqa
+        if self.pool is None:
+            raise ConnectionError("pg pool not initialized")
 
-        while True:
-            if self.pool is None:
-                raise ConnectionError("pg pool not initialized")
-            async with self.pool.acquire() as conn:
-                row = await conn.fetchrow("select result, status from dmq.task_results where task_id = $1", task_id)
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "select result, status, type_fqn from dmq.task_results where task_id = $1",
+                task_id
+            )
 
-            if row and row["status"] in ("success", "failed"):
-                return msgspec.json.decode(row["result"])
+        if row and row["status"] in ("SUCCESS", "FAILED"):
+            kws = {}
+            if self.type_serialization and row["type_fqn"]:
+                kws["type"] = _get_type_from_fqn(row["type_fqn"])
+            return msgspec.json.decode(row["result"], **kws)
 
-            if deadline and time.time() >= deadline:
-                raise TimeoutError(f"Result not available within {timeout}s")
+        notification_event = asyncio.Event()
 
-            await asyncio.sleep(0.1)
+        def notification_callback(connection, pid, channel, payload): # noqa
+            if payload == task_id:
+                notification_event.set()
+
+        async with self.pool.acquire() as conn:
+            await conn.add_listener("dmq_task_completion", notification_callback)
+
+            try:
+                row = await conn.fetchrow(
+                    "select result, status, type_fqn from dmq.task_results where task_id = $1",
+                    task_id
+                )
+
+                if row and row["status"] in ("SUCCESS", "FAILED"):
+                    kws = {}
+                    if self.type_serialization and row["type_fqn"]:
+                        kws["type"] = _get_type_from_fqn(row["type_fqn"])
+                    return msgspec.json.decode(row["result"], **kws)
+
+                if timeout:
+                    try:
+                        await asyncio.wait_for(notification_event.wait(), timeout=timeout)
+                    except TimeoutError as exc:
+                        raise TimeoutError(f"result not available within {timeout}s") from exc
+                else:
+                    await notification_event.wait()
+
+                row = await conn.fetchrow(
+                    "select result, status, type_fqn from dmq.task_results where task_id = $1",
+                    task_id
+                )
+
+                if row and row["status"] in ("SUCCESS", "FAILED"):
+                    kws = {}
+                    if self.type_serialization and row["type_fqn"]:
+                        kws["type"] = _get_type_from_fqn(row["type_fqn"])
+                    return msgspec.json.decode(row["result"], **kws)
+
+                raise KeyError(f"task result disappeared after notification: {task_id}")
+
+            finally:
+                await conn.remove_listener("dmq_task_completion", notification_callback)
 
     async def delete_result(self, task_id: str) -> None:
         if self.pool is None:
@@ -185,7 +261,7 @@ class PostgresResultBackend:
             )
 
             if not row:
-                raise KeyError(f"Workflow state not found: {workflow_id}")
+                raise KeyError(f"workflow state not found: {workflow_id}")
 
             return {
                 "workflow_id": workflow_id,
