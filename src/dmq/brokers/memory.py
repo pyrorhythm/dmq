@@ -6,9 +6,8 @@ from datetime import UTC, datetime
 from loguru import logger
 from ulid import ulid
 
-from dmq.util.scheduling import calculate_execute_time
-
 from ..types import Schedule, TaskMessage
+from ..utils.scheduling import calculate_execute_time
 
 
 class InMemoryBroker:

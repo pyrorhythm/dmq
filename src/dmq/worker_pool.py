@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 
 type _Worker = QAsyncWorker | QThreadedWorker
 
+
 class QWorkerPool:
     def __init__(
         self,
@@ -182,7 +183,7 @@ class QWorkerPool:
                 futures = [executor.submit(worker.stop, timeout) for worker in self.workers]  # pyrefly: ignore
                 for future in futures:
                     try:
-                        await future.result(timeout=timeout)
+                        future.result(timeout=timeout)
                     except Exception as e:
                         logger.warning("error stopping worker: {}", e)
         else:

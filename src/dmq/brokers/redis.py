@@ -10,11 +10,10 @@ import redis.asyncio as redis
 from loguru import logger
 from ulid import ulid
 
-from dmq.serializers.msgpack import MsgpackSerializer
-from dmq.util.redis_client import RedisClientManager
-from dmq.util.scheduling import calculate_execute_time
-
+from ..serializers.msgpack import MsgpackSerializer
 from ..types import Schedule, TaskMessage
+from ..utils.redis_client import RedisClientManager
+from ..utils.scheduling import calculate_execute_time
 
 if TYPE_CHECKING:
     from ..abc.serializer import QSerializerProtocol

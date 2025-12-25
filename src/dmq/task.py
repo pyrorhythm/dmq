@@ -10,11 +10,10 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 from ulid import ulid
 
-from dmq.util.misc import await_if_async
-
 from .events import QEventType, QTaskQueued
 from .types import CronSchedule, DelaySchedule, ETASchedule, QInProgressTask
 from .user_event import UserEventEmitter
+from .utils import await_if_async
 
 if TYPE_CHECKING:
     from .manager import QManager

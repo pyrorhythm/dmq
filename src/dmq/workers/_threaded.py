@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
-from ..guarantees import DeliveryConfig, IdempotencyStore
+from ..guarantees import DeliveryConfig
 from ..types import TaskMessage
 from ._base import QBaseWorker
 
@@ -26,7 +26,7 @@ class QThreadedWorker(QBaseWorker):
             manager=manager,
             worker_id=worker_id or f"threaded-worker-{id(self)}",
             delivery_config=delivery_config or DeliveryConfig(),
-            max_concurrent_tasks=max_concurrent_tasks
+            max_concurrent_tasks=max_concurrent_tasks,
         )
 
         self._thread: threading.Thread | None = None

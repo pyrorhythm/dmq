@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
-from ..guarantees import DeliveryConfig, IdempotencyStore
+from ..guarantees import DeliveryConfig
 from ..types import TaskMessage
 from ._base import QBaseWorker
 
@@ -26,7 +26,7 @@ class QAsyncWorker(QBaseWorker):
             manager=manager,
             worker_id=worker_id or f"async-worker-{id(self)}",
             delivery_config=delivery_config or DeliveryConfig(),
-            max_concurrent_tasks=max_concurrent_tasks
+            max_concurrent_tasks=max_concurrent_tasks,
         )
 
         self._process_task: asyncio.Task | None = None
@@ -52,11 +52,7 @@ class QAsyncWorker(QBaseWorker):
         self._semaphore = asyncio.Semaphore(self.max_concurrent_tasks)
         self._pending_tasks = set()
 
-        logger.info(
-            "worker {} started",
-            self.worker_id,
-            self.max_concurrent_tasks,
-        )
+        logger.info("worker {} started", self.worker_id, self.max_concurrent_tasks)
 
         self._process_task = asyncio.create_task(self._process_loop())
         self._started.set()
@@ -79,11 +75,7 @@ class QAsyncWorker(QBaseWorker):
         if self._pending_tasks:
             active = [t for t in self._pending_tasks if not t.done()]
             if active:
-                logger.info(
-                    "worker {} waiting for {} pending tasks",
-                    self.worker_id,
-                    len(active),
-                )
+                logger.info("worker {} waiting for {} pending tasks", self.worker_id, len(active))
                 await asyncio.gather(*active, return_exceptions=True)
 
         logger.info("worker {} stopped", self.worker_id)

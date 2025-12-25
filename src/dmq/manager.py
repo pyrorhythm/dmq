@@ -11,13 +11,22 @@ from .abc.serializer import QSerializerProtocol
 from .callback import Callback
 from .event_router import EventRouter
 from .task import QTask
-from .util.misc import _object_fqn
+from .utils import _object_fqn
 
 
 class QManager:
     def __init__(
         self, broker: QBrokerProtocol, result_backend: QResultBackendProtocol, serializer: QSerializerProtocol
     ) -> None:
+        """
+
+        initialize manager
+
+        :param broker: qbroker protocol impl
+        :param result_backend: qrbackend protocol impl
+        :param serializer: qserializer protocol impl
+
+        """
         self.broker: QBrokerProtocol = broker
         self.result_backend: QResultBackendProtocol = result_backend
         self.serializer: QSerializerProtocol = serializer
@@ -26,12 +35,15 @@ class QManager:
         self._callbacks: list[type[Callback]] = []
 
     def get_task(self, task_name: str) -> QTask | None:
+        """fetch task from registry by name"""
         task = self.task_registry.get(task_name)
         if task is None:
             logger.warning("task {} not found in task.registry: {}", task_name, self.task_registry)
         return task
 
     def register_callback(self, callback_cls: type[Callback]) -> type[Callback]:
+        """register callback"""
+
         self._callbacks.append(callback_cls)
         callback_instance = callback_cls()
         callback_instance.bind_manager(self)
@@ -39,11 +51,20 @@ class QManager:
         return callback_cls
 
     def callback(self, callback_cls: type[Callback]) -> type[Callback]:
+        """alias to register_callback"""
+
         return self.register_callback(callback_cls)
 
     def register[**Param, Return](
         self, qname: str | None = None, **kws: dict
     ) -> QTask[Param, Return] | Callable[[Callable[Param, Return]], QTask[Param, Return]]:
+        """
+        register task and wrap it with QTask
+
+        :param qname: task name
+        :param kws: task keyword arguments (labels)
+
+        """
         def _make(
             task_qname: str | None = None, task_kws: dict | None = None
         ) -> Callable[[Callable[Param, Return]], QTask[Param, Return]]:

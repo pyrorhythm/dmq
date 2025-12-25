@@ -8,11 +8,12 @@ from typing import TYPE_CHECKING, Any, Literal
 import asyncpg
 import msgspec
 
-from dmq.util.misc import _get_type_fqn, _get_type_from_fqn
+from ..utils import _get_type_fqn, _get_type_from_fqn
 
 if TYPE_CHECKING:
     pass
 
+import threading
 
 SCHEMA_SQL = """
 create schema if not exists dmq;
@@ -79,12 +80,52 @@ class PostgresResultBackend:
     def __init__(
         self, dsn: str, retention_policy: RetentionPolicy | None = None, type_serialization: bool = False
     ) -> None:
+        """
+        initialize postgres result backend
+
+        :param dsn: postgres connection string
+        :param retention_policy: RetentionPolicy
+        :param type_serialization: (defaults to False) -- if to serialize types of results,
+        requires worker and client to be in 1 working directory to correctly resolve FQN's
+
+        """
         self._type_memory: dict[str, type] = {}
         self.dsn = dsn
         self.pool: asyncpg.Pool | None = None
+        self._pools: dict[int, asyncpg.Pool] = {}
+        self._pools_lock = threading.Lock()
         self.retention_policy = retention_policy or RetentionPolicy()
         self._cleanup_task: asyncio.Task | None = None
+        self._cleanup_tasks: dict[int, asyncio.Task] = {}
         self.type_serialization = type_serialization
+
+    async def _get_pool(self) -> asyncpg.Pool:
+        try:
+            loop = asyncio.get_running_loop()
+            loop_id = id(loop)
+        except RuntimeError:
+            if self.pool is None:
+                await self.connect()
+            return self.pool  # type: ignore
+
+        if loop_id in self._pools:
+            return self._pools[loop_id]
+
+        with self._pools_lock:
+            if loop_id in self._pools:
+                return self._pools[loop_id]
+
+            pool = await asyncpg.create_pool(self.dsn)
+            self._pools[loop_id] = pool
+
+            if not self.pool:
+                await self._initialize_schema_with_pool(pool)
+                self.pool = pool
+
+            if loop_id not in self._cleanup_tasks:
+                self._cleanup_tasks[loop_id] = asyncio.create_task(self._cleanup_loop())
+
+            return pool
 
     async def connect(self) -> None:
         self.pool = await asyncpg.create_pool(self.dsn)
@@ -97,8 +138,19 @@ class PostgresResultBackend:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._cleanup_task
 
+        for task in self._cleanup_tasks.values():
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
         if self.pool:
             await self.pool.close()
+
+        with self._pools_lock:
+            for pool in self._pools.values():
+                if pool != self.pool:
+                    await pool.close()
+            self._pools.clear()
 
     async def _initialize_schema(self) -> None:
         if self.pool is None:
@@ -107,9 +159,14 @@ class PostgresResultBackend:
         async with self.pool.acquire() as conn:
             await conn.execute(SCHEMA_SQL)
 
-    async def store_result(self, task_id: str, result: Any, status: Literal["SUCCESS", "FAILED"] = "SUCCESS", task_name: str = "") -> None:
-        if self.pool is None:
-            raise ConnectionError("pg pool not initialized")
+    async def _initialize_schema_with_pool(self, pool: asyncpg.Pool) -> None:
+        async with pool.acquire() as conn:
+            await conn.execute(SCHEMA_SQL)
+
+    async def store_result(
+        self, task_id: str, result: Any, status: Literal["SUCCESS", "FAILED"] = "SUCCESS", task_name: str = ""
+    ) -> None:
+        pool = await self._get_pool()
 
         expires_at = None
         if self.retention_policy:
@@ -122,10 +179,9 @@ class PostgresResultBackend:
         if self.type_serialization:
             type_fqn = _get_type_fqn(result)
 
-        result_data = msgspec.json.encode(result)
-        result_json = msgspec.json.decode(result_data) if isinstance(result_data, bytes) else result_data
+        result_data = msgspec.json.encode(result).decode()
 
-        async with self.pool.acquire() as conn:
+        async with pool.acquire() as conn:
             await conn.execute(
                 """
                 insert into dmq.task_results
@@ -140,21 +196,19 @@ class PostgresResultBackend:
                 """,
                 task_id,
                 task_name,
-                result_json,
+                result_data,
                 type_fqn,
                 status,
                 datetime.now(UTC),
                 expires_at,
             )
 
-    async def get_result(self, task_id: str, timeout: float | None = None) -> Any: # noqa
-        if self.pool is None:
-            raise ConnectionError("pg pool not initialized")
+    async def get_result(self, task_id: str, timeout: float | None = None) -> Any:  # noqa
+        pool = await self._get_pool()
 
-        async with self.pool.acquire() as conn:
+        async with pool.acquire() as conn:
             row = await conn.fetchrow(
-                "select result, status, type_fqn from dmq.task_results where task_id = $1",
-                task_id
+                "select result, status, type_fqn from dmq.task_results where task_id = $1", task_id
             )
 
         if row and row["status"] in ("SUCCESS", "FAILED"):
@@ -165,17 +219,16 @@ class PostgresResultBackend:
 
         notification_event = asyncio.Event()
 
-        def notification_callback(connection, pid, channel, payload): # noqa
+        def notification_callback(connection, pid, channel, payload):  # noqa
             if payload == task_id:
                 notification_event.set()
 
-        async with self.pool.acquire() as conn:
+        async with pool.acquire() as conn:
             await conn.add_listener("dmq_task_completion", notification_callback)
 
             try:
                 row = await conn.fetchrow(
-                    "select result, status, type_fqn from dmq.task_results where task_id = $1",
-                    task_id
+                    "select result, status, type_fqn from dmq.task_results where task_id = $1", task_id
                 )
 
                 if row and row["status"] in ("SUCCESS", "FAILED"):
@@ -193,8 +246,7 @@ class PostgresResultBackend:
                     await notification_event.wait()
 
                 row = await conn.fetchrow(
-                    "select result, status, type_fqn from dmq.task_results where task_id = $1",
-                    task_id
+                    "select result, status, type_fqn from dmq.task_results where task_id = $1", task_id
                 )
 
                 if row and row["status"] in ("SUCCESS", "FAILED"):
@@ -209,24 +261,21 @@ class PostgresResultBackend:
                 await conn.remove_listener("dmq_task_completion", notification_callback)
 
     async def delete_result(self, task_id: str) -> None:
-        if self.pool is None:
-            raise ConnectionError("pg pool not initialized")
-        async with self.pool.acquire() as conn:
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
             await conn.execute("delete from dmq.task_results where task_id = $1", task_id)
 
     async def result_exists(self, task_id: str) -> bool:
-        if self.pool is None:
-            raise ConnectionError("pg pool not initialized")
-        async with self.pool.acquire() as conn:
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
             row = await conn.fetchrow("select 1 from dmq.task_results where task_id = $1", task_id)
             return row is not None
 
     async def store_workflow_state(self, workflow_id: str, state: Any) -> None:
         msgspec.json.encode(state).decode()
 
-        if self.pool is None:
-            raise ConnectionError("pg pool not initialized")
-        async with self.pool.acquire() as conn:
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
             await conn.execute(
                 """
                 insert into dmq.workflow_states
@@ -248,9 +297,8 @@ class PostgresResultBackend:
             )
 
     async def get_workflow_state(self, workflow_id: str) -> Any:
-        if self.pool is None:
-            raise ConnectionError("pg pool not initialized")
-        async with self.pool.acquire() as conn:
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
                 select workflow_name, current_nodes, completed_nodes, results
@@ -277,10 +325,9 @@ class PostgresResultBackend:
             await self.cleanup_expired()
 
     async def cleanup_expired(self) -> int:
-        if self.pool is None:
-            raise ConnectionError("pg pool not initialized")
+        pool = await self._get_pool()
 
-        async with self.pool.acquire() as conn:
+        async with pool.acquire() as conn:
             result = await conn.execute(
                 "delete from dmq.task_results where expires_at is not null and expires_at < now()"
             )

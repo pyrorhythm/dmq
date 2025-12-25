@@ -6,12 +6,11 @@ from typing import TYPE_CHECKING, Never
 import redis.asyncio as redis
 from ulid import ulid
 
-from dmq.util.redis_client import RedisClientManager
-
 from ..partitioning import HashPartitionStrategy, PartitionStrategy
 from ..serializers import MsgpackSerializer
 from ..topic import TopicConfig
 from ..types import TaskMessage
+from ..utils.redis_client import RedisClientManager
 
 if TYPE_CHECKING:
     from ..abc.serializer import QSerializerProtocol

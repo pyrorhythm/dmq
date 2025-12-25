@@ -9,9 +9,7 @@ import redis.asyncio as redis
 class RedisClientManager:
     def __init__(self, redis_url: str) -> None:
         self._redis_url = redis_url
-        self._clients: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, redis.Redis] = (
-            weakref.WeakKeyDictionary()
-        )
+        self._clients: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, redis.Redis] = weakref.WeakKeyDictionary()
 
     def client(self) -> redis.Redis:
         loop = asyncio.get_running_loop()

@@ -6,9 +6,9 @@ from typing import TYPE_CHECKING, Any
 import redis.asyncio as redis
 from loguru import logger
 
-from dmq.serializers.msgpack import MsgpackSerializer
-from dmq.util.misc import _get_type_fqn, _get_type_from_fqn
-from dmq.util.redis_client import RedisClientManager
+from ..serializers import MsgpackSerializer
+from ..utils import _get_type_fqn, _get_type_from_fqn
+from ..utils.redis_client import RedisClientManager
 
 if TYPE_CHECKING:
     from ..abc.serializer import QSerializerProtocol
@@ -49,9 +49,9 @@ class RedisResultBackend:
         if self.type_serialization:
             _type = _get_type_fqn(result)
             if _type is None:
-                logger.warning("type_serialization is True but failed to get type FQN of {}, "
-                               "serializing as builtins:str",
-                               result)
+                logger.warning(
+                    "type_serialization is True but failed to get type FQN of {}, serializing as builtins:str", result
+                )
                 _type = "builtins:str"
 
             await self.redis.setex(key + ":type", ttl or self.default_ttl, _type)

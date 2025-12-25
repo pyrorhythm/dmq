@@ -23,6 +23,7 @@ redis = ["redis>=7"]
 
 [dependency-groups]
 dev = [
+  "aiohttp>=3.13.2",
   "pyrefly>=0.45.2",
   "pytest>=9.0.2",
   "pytest-asyncio>=0.24.0",

@@ -12,8 +12,8 @@ from ..execution_mode import ExecutionMode
 from ..guarantees import DeliveryConfig, DeliveryGuarantee
 from ..manager import QManager
 from ..runtime import detect_execution_mode, get_recommended_worker_count
+from ..utils import import_object, import_tasks
 from ..worker_pool import QWorkerPool
-from .utils import import_object, import_tasks
 
 logger = loguru.logger.bind(name="dmq.cli")
 

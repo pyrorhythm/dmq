@@ -18,7 +18,7 @@ from ..guarantees import DeliveryConfig
 from ..task import QTask
 from ..types import TaskMessage
 from ..user_event import UserEventEmitter
-from ..util.misc import await_if_async
+from ..utils import await_if_async
 
 if TYPE_CHECKING:
     from ..guarantees import IdempotencyStore
@@ -44,9 +44,7 @@ class QBaseWorker:
         self._task_queue: asyncio.Queue[TaskMessage] = asyncio.Queue()
         self._semaphore = asyncio.Semaphore(self.max_concurrent_tasks)
 
-    async def _process_loop(
-        self,
-    ) -> None:
+    async def _process_loop(self) -> None:
         while self._running:
             try:
                 message = await asyncio.wait_for(self._task_queue.get(), timeout=0.5)
@@ -58,10 +56,7 @@ class QBaseWorker:
             except asyncio.CancelledError:
                 break
 
-    async def _execute_with_semaphore(
-        self,
-        message: TaskMessage,
-    ) -> None:
+    async def _execute_with_semaphore(self, message: TaskMessage) -> None:
         if self._semaphore is None:
             logger.warning("sema is None; executing task without semaphore")
             await self._handle_task(message)
@@ -116,25 +111,14 @@ class QBaseWorker:
             if self.delivery_config.should_ack_after_processing():
                 await self.manager.broker.ack_task(message.task_id)
 
-            logger.debug(
-                "worker {} completed task {} in {:.3f}s",
-                self.worker_id,
-                message.task_id,
-                duration,
-            )
+            logger.debug("worker {} completed task {} in {:.3f}s", self.worker_id, message.task_id, duration)
 
         except Exception as e:
             await self._handle_task_failure(message, e)
 
-    async def _handle_task_failure(
-        self, message: TaskMessage, exception: Exception
-    ) -> None:
-        logger.warning(
-            "worker {} task {} failed: {}",
-            self.worker_id,
-            message.task_id,
-            exception,
-        )
+    async def _handle_task_failure(self, message: TaskMessage, exception: Exception) -> None:
+        logger.warning("worker {} task {} failed: {}", self.worker_id, message.task_id, exception)
+
         logger.debug("traceback: {}", traceback.format_exc())
 
         if message.retry_count < message.max_retries:
