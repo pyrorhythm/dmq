@@ -119,7 +119,7 @@ class PostgresResultBackend:
             self._pools[loop_id] = pool
 
             if not self.pool:
-                await self._initialize_schema_with_pool(pool)
+                await self._initialize_schema(pool)
                 self.pool = pool
 
             if loop_id not in self._cleanup_tasks:
@@ -129,7 +129,7 @@ class PostgresResultBackend:
 
     async def connect(self) -> None:
         self.pool = await asyncpg.create_pool(self.dsn)
-        await self._initialize_schema()
+        await self._initialize_schema(self.pool)
         self._cleanup_task = asyncio.create_task(self._cleanup_loop())
 
     async def close(self) -> None:
@@ -152,14 +152,13 @@ class PostgresResultBackend:
                     await pool.close()
             self._pools.clear()
 
-    async def _initialize_schema(self) -> None:
-        if self.pool is None:
-            raise ConnectionError("pg pool not initialized")
+    def _decode_row(self, row: asyncpg.Record) -> Any:
+        kws = {}
+        if self.type_serialization and row["type_fqn"]:
+            kws["type"] = _get_type_from_fqn(row["type_fqn"])
+        return msgspec.json.decode(row["result"], **kws)
 
-        async with self.pool.acquire() as conn:
-            await conn.execute(SCHEMA_SQL)
-
-    async def _initialize_schema_with_pool(self, pool: asyncpg.Pool) -> None:
+    async def _initialize_schema(self, pool: asyncpg.Pool) -> None:
         async with pool.acquire() as conn:
             await conn.execute(SCHEMA_SQL)
 
@@ -212,10 +211,7 @@ class PostgresResultBackend:
             )
 
         if row and row["status"] in ("SUCCESS", "FAILED"):
-            kws = {}
-            if self.type_serialization and row["type_fqn"]:
-                kws["type"] = _get_type_from_fqn(row["type_fqn"])
-            return msgspec.json.decode(row["result"], **kws)
+            return self._decode_row(row)
 
         notification_event = asyncio.Event()
 
@@ -232,10 +228,7 @@ class PostgresResultBackend:
                 )
 
                 if row and row["status"] in ("SUCCESS", "FAILED"):
-                    kws = {}
-                    if self.type_serialization and row["type_fqn"]:
-                        kws["type"] = _get_type_from_fqn(row["type_fqn"])
-                    return msgspec.json.decode(row["result"], **kws)
+                    return self._decode_row(row)
 
                 if timeout:
                     try:
@@ -250,10 +243,7 @@ class PostgresResultBackend:
                 )
 
                 if row and row["status"] in ("SUCCESS", "FAILED"):
-                    kws = {}
-                    if self.type_serialization and row["type_fqn"]:
-                        kws["type"] = _get_type_from_fqn(row["type_fqn"])
-                    return msgspec.json.decode(row["result"], **kws)
+                    return self._decode_row(row)
 
                 raise KeyError(f"task result disappeared after notification: {task_id}")
 
@@ -272,8 +262,6 @@ class PostgresResultBackend:
             return row is not None
 
     async def store_workflow_state(self, workflow_id: str, state: Any) -> None:
-        msgspec.json.encode(state).decode()
-
         pool = await self._get_pool()
         async with pool.acquire() as conn:
             await conn.execute(

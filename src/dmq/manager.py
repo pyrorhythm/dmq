@@ -65,6 +65,7 @@ class QManager:
         :param kws: task keyword arguments (labels)
 
         """
+
         def _make(
             task_qname: str | None = None, task_kws: dict | None = None
         ) -> Callable[[Callable[Param, Return]], QTask[Param, Return]]:

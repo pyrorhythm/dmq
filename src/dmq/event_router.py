@@ -4,6 +4,8 @@ import asyncio
 import weakref
 from typing import TYPE_CHECKING
 
+from loguru import logger
+
 from .events import QEvent
 
 if TYPE_CHECKING:
@@ -62,7 +64,10 @@ class EventRouter:
                 tasks.append(asyncio.create_task(callback.handle(event)))
 
         if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for result in results:
+                if isinstance(result, BaseException):
+                    logger.error("callback error: {}", result)
 
     async def shutdown(self) -> None:
         _listener_task = self._get_listener_task()

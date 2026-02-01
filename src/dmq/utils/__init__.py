@@ -1,4 +1,4 @@
-from ._import import (
+from .import_funcs import (
     _get_type_fqn,
     _get_type_from_fqn,
     _object_fqn,

@@ -52,7 +52,15 @@ class RedisBroker:
         if task_id is None:
             task_id = str(ulid())
 
-        message = TaskMessage(task_id=task_id, task_name=task_name, args=args, kwargs=kwargs, options=options)
+        message = TaskMessage(
+            task_id=task_id,
+            task_name=task_name,
+            args=args,
+            kwargs=kwargs,
+            options=options,
+            retry_count=options.pop("_retry_count", 0),
+            max_retries=options.pop("_max_retries", 3),
+        )
 
         data = self.serializer.serialize(message)
         await self.redis.lpush(self.queue_name, data)  # pyrefly: ignore[not-async]

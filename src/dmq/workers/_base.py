@@ -124,9 +124,19 @@ class QBaseWorker:
         if message.retry_count < message.max_retries:
             retry_event = _task_retry_event(message)
             await self.manager.event_router.emit(retry_event)
-            await self.manager.broker.neg_ack_task(message.task_id, requeue=True)
+            await self.manager.broker.send_task(
+                task_name=message.task_name,
+                args=message.args,
+                kwargs=message.kwargs,
+                options={
+                    **message.options,
+                    "_retry_count": message.retry_count + 1,
+                    "_max_retries": message.max_retries,
+                },
+                task_id=message.task_id,
+            )
         else:
             failed_event = _task_failure_event(message, exception)
             await self.manager.event_router.emit(failed_event)
-            await self.manager.result_backend.store_result(message.task_id, exception, status="FAILED")
+            await self.manager.result_backend.store_result(message.task_id, str(exception), status="FAILED")
             await self.manager.broker.neg_ack_task(message.task_id, requeue=False)

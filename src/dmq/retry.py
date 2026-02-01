@@ -1,14 +1,8 @@
 from __future__ import annotations
 
 import random
-from abc import ABC, abstractmethod
 
 import msgspec
-
-
-class BackoffStrategy(ABC):
-    @abstractmethod
-    def calculate_delay(self, retry_count: int) -> float: ...
 
 
 class ExponentialBackoff(msgspec.Struct, frozen=True):

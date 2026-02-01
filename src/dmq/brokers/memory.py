@@ -25,7 +25,15 @@ class InMemoryBroker:
     ) -> str:
         if task_id is None:
             task_id = str(ulid())
-        message = TaskMessage(task_id=task_id, task_name=task_name, args=args, kwargs=kwargs, options=options)
+        message = TaskMessage(
+            task_id=task_id,
+            task_name=task_name,
+            args=args,
+            kwargs=kwargs,
+            options=options,
+            retry_count=options.pop("_retry_count", 0),
+            max_retries=options.pop("_max_retries", 3),
+        )
         await self._task_queue.put(message)
         logger.debug("task {} queued: {}", task_id, task_name)
         return task_id

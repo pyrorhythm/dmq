@@ -41,8 +41,8 @@ class RedisResultBackend:
     def redis(self) -> redis.Redis:
         return self._redis_manager.client()
 
-    async def store_result(self, task_id: str, result: Any, ttl: int | None = None) -> None:
-        key = f"sotq:result:{task_id}"
+    async def store_result(self, task_id: str, result: Any, status: str = "SUCCESS", ttl: int | None = None) -> None:
+        key = f"dmq:result:{task_id}"
         data: bytes = self.serializer.serialize(result)
         await self.redis.setex(key, ttl or self.default_ttl, data)
 
@@ -56,10 +56,10 @@ class RedisResultBackend:
 
             await self.redis.setex(key + ":type", ttl or self.default_ttl, _type)
 
-        await self.redis.publish(f"sotq:result:ready:{task_id}", "ready")
+        await self.redis.publish(f"dmq:result:ready:{task_id}", "ready")
 
     async def get_result(self, task_id: str, timeout: float | None = None) -> Any:
-        key = f"sotq:result:{task_id}"
+        key = f"dmq:result:{task_id}"
 
         if (_res := await self._fetch_result(key)) is not None:
             return _res
@@ -68,7 +68,7 @@ class RedisResultBackend:
             raise KeyError(f"result not found: {task_id}")
 
         pubsub = self.redis.pubsub()
-        await pubsub.subscribe(f"sotq:result:ready:{task_id}")
+        await pubsub.subscribe(f"dmq:result:ready:{task_id}")
 
         try:
             async with asyncio.timeout(timeout):
@@ -94,9 +94,9 @@ class RedisResultBackend:
         return _deser
 
     async def delete_result(self, task_id: str) -> None:
-        key = f"sotq:result:{task_id}"
+        key = f"dmq:result:{task_id}"
         await self.redis.delete(key)
 
     async def result_exists(self, task_id: str) -> bool:
-        key = f"sotq:result:{task_id}"
+        key = f"dmq:result:{task_id}"
         return await self.redis.exists(key) > 0

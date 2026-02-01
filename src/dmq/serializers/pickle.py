@@ -2,7 +2,9 @@ import pickle
 import warnings
 from typing import Any
 
-from urllib3.exceptions import SecurityWarning
+
+class SecurityWarning(Warning):
+    pass
 
 
 class PickleSerializer:
@@ -19,5 +21,5 @@ class PickleSerializer:
         return pickle.dumps(data, protocol=pickle.HIGHEST_PROTOCOL)
 
     @staticmethod
-    def deserialize(data: bytes) -> Any:
-        return pickle.loads(data)
+    def deserialize(data: bytes, into: type | None = None) -> Any:
+        return pickle.loads(data)  # noqa

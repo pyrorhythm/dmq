@@ -8,7 +8,7 @@ class InMemoryResultBackend:
         self._events: dict[str, asyncio.Event] = {}
         self._lock = asyncio.Lock()
 
-    async def store_result(self, task_id: str, result: Any) -> None:
+    async def store_result(self, task_id: str, result: Any, status: str = "SUCCESS") -> None:
         async with self._lock:
             self._results[task_id] = result
             if task_id in self._events:
