@@ -3,7 +3,7 @@ from __future__ import annotations
 import contextvars
 import sys
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable, Coroutine
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -23,20 +23,20 @@ _current_emitter: contextvars.ContextVar[UserEventEmitter | None] = contextvars.
 )
 
 
-class QTask[**Param, ReturnType]:
+class QTask[**P, T]:
     def __init__(
         self,
-        original_func: Callable[Param, ReturnType | Awaitable[ReturnType]],
+        original_func: Callable[P, T | Coroutine[Any, Any, T]],
         task_name: str,
         task_kws: dict,
         manager: QManager,
-        return_type: type[ReturnType] | None = None,
+        return_type: type[T] | None = None,
     ) -> None:
         self.original_func = original_func
         self.task_name: str = task_name
         self.task_labels: dict[str, Any] = task_kws
         self.manager: QManager = manager
-        self.return_type: type[ReturnType] | None = return_type
+        self.return_type: type[T] | None = return_type
 
         new_name = f"{self.original_func.__name__}_org_dq"
         self.original_func.__name__ = new_name
@@ -47,7 +47,7 @@ class QTask[**Param, ReturnType]:
             self.original_func.__qualname__ = new_qualname
         setattr(sys.modules[original_func.__module__], new_name, original_func)
 
-    async def __call__(self, *args: Param.args, **kwargs: Param.kwargs) -> ReturnType:
+    async def __call__(self, *args: P.args, **kwargs: P.kwargs) -> T:
         return await await_if_async(self.original_func(*args, **kwargs))  # pyrefly: ignore[ignore-param-spec]
 
     @staticmethod
@@ -61,7 +61,7 @@ class QTask[**Param, ReturnType]:
     def set_emitter(emitter: UserEventEmitter | None) -> None:
         _current_emitter.set(emitter)
 
-    async def q(self, *args: Param.args, **kwargs: Param.kwargs) -> QInProgressTask:
+    async def q(self, *args: P.args, **kwargs: P.kwargs) -> QInProgressTask:
         task_id = str(ulid())
         options = self.task_labels.copy()
 
@@ -90,8 +90,8 @@ class QTask[**Param, ReturnType]:
         delay: float | None = None,
         eta: datetime | None = None,
         cron: str | None = None,
-        *args: Param.args,
-        **kwargs: Param.kwargs,
+        *args: P.args,
+        **kwargs: P.kwargs,
     ) -> QInProgressTask:
         schedule_params = [delay, eta, cron]
         provided_count = sum(p is not None for p in schedule_params)

@@ -16,3 +16,6 @@ lint:
 
 type-check:
 	uv run pyrefly check
+
+test:
+	uv run pytest tests/ -v --tb=short 2>&1
