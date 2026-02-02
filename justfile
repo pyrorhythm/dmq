@@ -19,3 +19,6 @@ type-check:
 
 test:
 	uv run pytest tests/ -v --tb=short 2>&1
+
+test-lima:
+	TESTCONTAINERS_RYUK_DISABLED=true DOCKER_HOST=unix:///Users/pyro/.lima/default/sock/docker.sock uv run pytest tests/ -v --tb=short 2>&1

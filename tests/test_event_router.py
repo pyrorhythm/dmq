@@ -107,7 +107,7 @@ async def test_unregister_callback():
     assert len(router._callbacks) == 0
 
 
-async def test_callback_error_is_logged(caplog):
+async def test_callback_error_is_logged():
     router = EventRouter()
 
     class BrokenCallback(Callback):

@@ -19,6 +19,7 @@ class ETASchedule(msgspec.Struct, frozen=True):
 
 class CronSchedule(msgspec.Struct, frozen=True):
     cron_expr: str
+    delay_seconds: float = 0.0
 
 
 type Schedule = DelaySchedule | ETASchedule | CronSchedule
