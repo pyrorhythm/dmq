@@ -11,14 +11,14 @@ jobs:
     environment:
       name: pypi
     permissions:
-      contents: write
+      contents: read
       id-token: write
 
     steps:
       - name: -> checkout
         uses: actions/checkout@v6
         with:
-          ref: master
+          ref: main
 
       - name: -> setup py
         uses: actions/setup-python@v6
@@ -30,26 +30,20 @@ jobs:
         with:
           enable-cache: true
 
+      - name: -> setup just
+        uses: extractions/setup-just@v3
+        with:
+          just-version: '*'
+
       - name: -> sync
-        run: make sync
+        run: just sync
 
       - name: -> ruff
-        run: make lint
+        run: |
+          uv run ruff check --fix-only .
 
       - name: -> pyrefly
-        run: make type-check
-
-      - name: -> uv version
-        shell: bash
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          uv version "$VERSION" --frozen
-
-      - name: -> commit bump
-        uses: stefanzweifel/git-auto-commit-action@v7
-        with:
-          commit_message: 'ci: bump version to ${{ github.ref_name }}'
-          commit_author: '${{ github.actor }} <${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com>'
+        run: uv run pyrefly check
 
       - name: build pkg
         uses: ./.github/actions/build
@@ -61,4 +55,4 @@ jobs:
           path: dist/
 
       - name: -> publish
-        run: make publish
+        run: just publish
