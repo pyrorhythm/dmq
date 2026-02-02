@@ -21,6 +21,7 @@ all = ["redis>=7", "asyncpg>=0.30.0"]
 postgres = ["asyncpg>=0.30.0"]
 redis = ["redis>=7"]
 
+
 [dependency-groups]
 dev = [
   "aiohttp>=3.13.2",
