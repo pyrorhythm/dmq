@@ -7,11 +7,13 @@ from .partitioning import (
     RoundRobinPartitionStrategy,
 )
 from .runtime import detect_execution_mode, get_recommended_worker_count, is_free_threaded_build
+from .scheduler import PeriodicScheduler
 from .worker_pool import QWorkerPool
 from .workers import QAsyncWorker, QThreadedWorker
 
 __all__ = [
     "QManager",
+    "PeriodicScheduler",
     "QAsyncWorker",
     "QThreadedWorker",
     "QWorkerPool",

@@ -82,7 +82,7 @@ def import_from_modules(modules: list[str]) -> None:
 
 def import_tasks(modules: list[str], pattern: str | Sequence[str], fs_discover: bool) -> None:
     """
-    @ from github.com/taskiq/taskiq
+    @ from `github.com/taskiq/taskiq`
 
     import tasks modules.
 

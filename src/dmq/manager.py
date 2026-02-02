@@ -10,7 +10,9 @@ from .abc.broker import QBrokerProtocol
 from .abc.serializer import QSerializerProtocol
 from .callback import Callback
 from .event_router import EventRouter
+from .scheduler import PeriodicScheduler
 from .task import QTask
+from .types import Schedule
 from .utils import _object_fqn
 
 
@@ -32,6 +34,7 @@ class QManager:
         self.serializer: QSerializerProtocol = serializer
         self.task_registry: dict[str, Any] = {}
         self.event_router = EventRouter()
+        self.scheduler = PeriodicScheduler(self)
         self._callbacks: list[type[Callback]] = []
 
     def get_task(self, task_name: str) -> QTask | None:
@@ -100,3 +103,22 @@ class QManager:
             return _make(task_kws=kws or {})(qname)
 
         return _make(task_qname=qname, task_kws=kws or {})
+
+    def periodic[**Param, Return](
+        self, schedule: Schedule, qname: str | None = None, **kws: dict
+    ) -> Callable[[Callable[Param, Return]], QTask[Param, Return]]:
+        """
+        register a periodic task
+
+        :param schedule: CronSchedule or DelaySchedule for repeat interval
+        :param qname: task name
+        :param kws: task keyword arguments (labels)
+
+        """
+
+        def wrapper(func: Callable[Param, Return | Awaitable[Return]]) -> QTask[Param, Return]:
+            task = self.register(qname, **kws)(func)
+            self.scheduler.register(task.task_name, schedule)
+            return task
+
+        return wrapper

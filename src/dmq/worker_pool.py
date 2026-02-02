@@ -143,6 +143,8 @@ class QWorkerPool:
         # dispatcher remains async in both modes
         self._dispatcher_task = asyncio.create_task(self._dispatcher_loop(), name="dispatcher")
 
+        await self.manager.scheduler.start()
+
         self._started.set()
         logger.info("pool initiated; {} workers (mode: {})", self.worker_count, self.execution_mode)
 
@@ -169,6 +171,8 @@ class QWorkerPool:
 
         logger.info("shutting down worker pool...")
         self._running = False
+
+        await self.manager.scheduler.stop()
 
         if hasattr(self.manager.broker, "shutdown"):
             await self.manager.broker.shutdown()
