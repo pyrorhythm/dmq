@@ -1,25 +1,40 @@
+import os
 import pickle
 import warnings
-from typing import Any
 
 
 class SecurityWarning(Warning):
-    pass
+	pass
+
+
+pickle_allowed = os.getenv("DMQ_ALLOW_PICKLE", "").strip().lower() == "yes"
 
 
 class PickleSerializer:
-    @staticmethod
-    def serialize(data: Any) -> bytes:
-        warnings.warn(
-            "PickleSerializer is not secure and should only be used in trusted environments. "
-            "Pickle can execute arbitrary code during deserialization. "
-            "Consider using MsgpackSerializer or JsonSerializer instead.",
-            SecurityWarning,
-            stacklevel=2,
-        )
+	@staticmethod
+	def serialize(data: object) -> bytes:
+		if not pickle_allowed:
+			warnings.warn(
+				"PickleSerializer is not secure and should only be used in trusted environments. "
+				"Pickle can execute arbitrary code during deserialization. "
+				"Consider using MsgpackSerializer or JsonSerializer instead.\n\n"
+				"This warning could be turned off by setting envvar DMQ_ALLOW_PICKLE=yes.",
+				SecurityWarning,
+				stacklevel=2,
+			)
 
-        return pickle.dumps(data, protocol=pickle.HIGHEST_PROTOCOL)
+		return pickle.dumps(data, protocol=pickle.HIGHEST_PROTOCOL)
 
-    @staticmethod
-    def deserialize(data: bytes, into: type | None = None) -> Any:
-        return pickle.loads(data)  # noqa
+	@staticmethod
+	def deserialize(data: bytes, into: type | None = None) -> object:
+		if not pickle_allowed:
+			warnings.warn(
+				"PickleSerializer is not secure and should only be used in trusted environments. "
+				"Pickle can execute arbitrary code during deserialization. "
+				"Consider using MsgpackSerializer or JsonSerializer instead.\n\n"
+				"This warning could be turned off by setting envvar DMQ_ALLOW_PICKLE=yes.",
+				SecurityWarning,
+				stacklevel=2,
+			)
+
+		return pickle.loads(data)

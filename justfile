@@ -1,24 +1,45 @@
+default:
+    just --list
+
 sync:
-	uv sync --all-extras --dev
+    uv sync --all-extras --dev --refresh
 
-publish-test:
-	uv publish --index=testpypi --trusted-publishing=always
-
-publish:
-	uv publish --index=pypi --trusted-publishing=always
+publish INDEX="pypi":
+    uv publish --index="{{ INDEX }}" --trusted-publishing=always
 
 build:
-	uv build -o dist/ --no-sources
+    uv build -o dist/ --no-sources
 
-lint:
-	uv run ruff check --fix-only .
-	uv run ruff format .
+lint PATH=".":
+    uv run ruff check --fix-only "{{ PATH }}"
+    uv run ruff format "{{ PATH }}"
 
-type-check:
-	uv run pyrefly check
+typecheck PATH="src":
+    uv run pyrefly check "{{ PATH }}"
 
-test:
-	uv run pytest tests/ -v --tb=short 2>&1
+push-commit MSG: sync lint (typecheck 'src') (test '-q' 'no')
+    git add .
+    git commit -m "{{ MSG }}"
+    git push
 
-test-lima:
-	TESTCONTAINERS_RYUK_DISABLED=true DOCKER_HOST=unix:///Users/pyro/.lima/default/sock/docker.sock uv run pytest tests/ -v --tb=short 2>&1
+bump SEMVER:
+    uv version "{{ SEMVER }}"
+
+release-git SEMVER:
+    git pull
+    git add .
+    git commit -m "release: {{ SEMVER }}"
+    git push
+
+tag-push SEMVER:
+    git tag -a "{{ SEMVER }}" -m "release: {{ SEMVER }}"
+    git push origin "{{ SEMVER }}"
+
+release SEMVER: sync lint (typecheck 'src') (test '-q' 'no') (bump SEMVER) (release-git SEMVER) (tag-push SEMVER)
+
+# let it be down here, it breaks syntax highlighting in Zed :D
+
+[arg('q', long='quiet', short='q', value='-q')]
+[arg('tb', long='tb')]
+test q='' tb='short' DIR="tests/" *FLAGS:
+    uv run pytest {{ FLAGS }} "{{ DIR }}" {{ q }} --tb={{ tb }}

@@ -1,6 +1,6 @@
 [project]
 name = "dmq"
-version = "0.1.0"
+version = "0.1.1"
 description = "python-native distributed message queue"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -25,6 +25,7 @@ redis = ["redis>=7"]
 [dependency-groups]
 dev = [
   "aiohttp>=3.13.2",
+  "dmq[all]",
   "pyrefly>=0.45.2",
   "pytest>=9.0.2",
   "pytest-asyncio>=0.24.0",
@@ -63,55 +64,75 @@ src = ["src"]
 
 [tool.ruff.format]
 docstring-code-format = true
-skip-magic-trailing-comma = true
 line-ending = "lf"
+indent-style = "tab"
 
 [tool.ruff.lint]
+# Allow autofix for all enabled rules (when `--fix`) is provided.
 fixable = ["ALL"]
 unfixable = []
 select = [
-  "E",
-  "F",
-  "I",
-  "N",
-  "UP",
-  "ANN",
-  "ASYNC",
-  "S",
-  "B",
-  "A",
-  "C4",
-  "G",
-  "PIE",
-  "Q",
-  "SIM",
-  "ARG",
-  "PTH",
-  "TD",
-  "PL",
-  "PERF"
+    "E",
+    "F",
+    "I",
+    "N",
+    "UP",
+    "ANN",
+    "ASYNC",
+    "S",
+    "B",
+    "A",
+    "C4",
+    "G",
+    "PIE",
+    "Q",
+    "SIM",
+    "ARG",
+    "PTH",
+    "TD",
+    "PL",
+    "PERF"
 ]
-ignore = ["PERF401", "PLC0415"]
+ignore = [
+    "PERF401",
+    "B008",
+    "A002",
+    "ARG001",
+    "ARG002",
+    "ANN003",
+    "ANN001",
+    "ANN002",
+    "ANN401",
+    "TD002",
+    "TD003",
+    "TD004",
+    "TD005",
+    "PLR0913",
+    "PLR0912",
+    "PLR0915",
+    "PLR2004",
+    "PLR6301"
+]
 
 [tool.ruff.lint.isort]
 known-first-party = [
-  "common",
-  "db",
-  "libs",
-  "handlers",
-  "backend_common",
-  "actions"
+    "common",
+    "db",
+    "libs",
+    "handlers",
+    "backend_common",
+    "actions"
 ]
 
 [tool.ruff.lint.pep8-naming]
 classmethod-decorators = [
-  "pydantic.root_validator",
-  "pydantic.validator",
+    "pydantic.root_validator",
+    "pydantic.validator",
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F403"]
-"**/{tests}/*" = ["S101", "PLR2004"]
+"**/{tests}/*" = ["S101", "PLR2004", "ANN201", "ANN001"]
 "**/{tests}/*/test_*" = ["ANN201"]
 
 [tool.ruff.lint.pylint]
@@ -137,3 +158,6 @@ name = "testpypi"
 url = "https://test.pypi.org/simple/"
 publish-url = "https://test.pypi.org/legacy/"
 explicit = true
+
+[tool.uv.sources]
+dmq = { workspace = true }

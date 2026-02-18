@@ -206,7 +206,7 @@ wheels = [
 
 [[package]]
 name = "dmq"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "." }
 dependencies = [
     { name = "croniter" },
@@ -231,6 +231,7 @@ redis = [
 [package.dev-dependencies]
 dev = [
     { name = "aiohttp" },
+    { name = "dmq", extra = ["all"] },
     { name = "pyrefly" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -255,6 +256,7 @@ provides-extras = ["all", "postgres", "redis"]
 [package.metadata.requires-dev]
 dev = [
     { name = "aiohttp", specifier = ">=3.13.2" },
+    { name = "dmq", extras = ["all"], editable = "." },
     { name = "pyrefly", specifier = ">=0.45.2" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest-asyncio", specifier = ">=0.24.0" },
