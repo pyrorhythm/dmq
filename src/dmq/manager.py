@@ -15,6 +15,7 @@ from .event_router import EventRouter
 from .scheduler import PeriodicScheduler
 from .task import QTask
 from .utils import object_fqn
+from .workflow import WorkflowEngine
 
 type _QTaskDecorator[**P, R] = Callable[[Callable[P, R | Coroutine[None, None, R]]], QTask[P, R]]
 
@@ -39,6 +40,7 @@ class QManager:
 		self.task_registry: dict[str, Any] = {}
 		self.event_router = EventRouter()
 		self.scheduler = PeriodicScheduler(self)
+		self.workflow_engine = WorkflowEngine(self)
 		self._callbacks: list[type[Callback]] = []
 
 	def get_task(self, task_name: str) -> QTask | None:

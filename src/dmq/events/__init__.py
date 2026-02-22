@@ -1,4 +1,17 @@
-from .core import QEvent, QEventBase, QEventType, QTaskCompleted, QTaskFailed, QTaskQueued, QTaskRetry, QTaskStarted
+from .core import (
+	QEvent,
+	QEventBase,
+	QEventType,
+	QTaskCompleted,
+	QTaskFailed,
+	QTaskQueued,
+	QTaskRetry,
+	QTaskStarted,
+	QWorkflowCompleted,
+	QWorkflowFailed,
+	QWorkflowStarted,
+	QWorkflowStepCompleted,
+)
 from .shortcuts import (
 	_task_completed_event,
 	_task_failure_event,
@@ -16,6 +29,10 @@ __all__ = [
 	"QEventType",
 	"QEventBase",
 	"QEvent",
+	"QWorkflowStarted",
+	"QWorkflowStepCompleted",
+	"QWorkflowCompleted",
+	"QWorkflowFailed",
 	"_task_retry_event",
 	"_task_failure_event",
 	"_task_started_event",

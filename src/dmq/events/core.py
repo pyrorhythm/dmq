@@ -89,4 +89,50 @@ class QTaskNotFound(msgspec.Struct, frozen=True):
 	event_type: QEventType = QEventType.TASK_NOT_FOUND
 
 
-type QEvent = QEventBase | QTaskQueued | QTaskStarted | QTaskCompleted | QTaskFailed | QTaskRetry | QTaskNotFound
+class QWorkflowStarted(msgspec.Struct, frozen=True):
+	workflow_id: str
+	workflow_name: str
+	timestamp: float
+	event_type: QEventType = QEventType.WORKFLOW_STARTED
+
+
+class QWorkflowStepCompleted(msgspec.Struct, frozen=True):
+	workflow_id: str
+	workflow_name: str
+	step_index: int
+	task_id: str
+	timestamp: float
+	result: Any = None
+	event_type: QEventType = QEventType.WORKFLOW_STEP_COMPLETED
+
+
+class QWorkflowCompleted(msgspec.Struct, frozen=True):
+	workflow_id: str
+	workflow_name: str
+	timestamp: float
+	result: Any = None
+	event_type: QEventType = QEventType.WORKFLOW_COMPLETED
+
+
+class QWorkflowFailed(msgspec.Struct, frozen=True):
+	workflow_id: str
+	workflow_name: str
+	timestamp: float
+	error: str
+	step_index: int
+	event_type: QEventType = QEventType.WORKFLOW_FAILED
+
+
+type QEvent = (
+	QEventBase
+	| QTaskQueued
+	| QTaskStarted
+	| QTaskCompleted
+	| QTaskFailed
+	| QTaskRetry
+	| QTaskNotFound
+	| QWorkflowStarted
+	| QWorkflowStepCompleted
+	| QWorkflowCompleted
+	| QWorkflowFailed
+)

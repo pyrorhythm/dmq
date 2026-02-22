@@ -9,6 +9,7 @@ from .partitioning import (
 from .runtime import detect_execution_mode, get_recommended_worker_count, is_free_threaded_build
 from .scheduler import PeriodicScheduler
 from .worker_pool import QWorkerPool
+from .workflow import QOngoingWorkflow, Workflow, WorkflowEngine
 from .workers import QAsyncWorker, QThreadedWorker
 
 __all__ = [
@@ -25,4 +26,7 @@ __all__ = [
 	"HashPartitionStrategy",
 	"KeyBasedPartitionStrategy",
 	"RoundRobinPartitionStrategy",
+	"Workflow",
+	"QOngoingWorkflow",
+	"WorkflowEngine",
 ]
