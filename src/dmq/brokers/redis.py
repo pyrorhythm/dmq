@@ -39,7 +39,7 @@ class RedisBroker:
 		self.poll_interval = poll_interval
 		self._running = True
 		self._scheduler_task: asyncio.Task | None = None
-		self.serializer = serializer or MsgpackSerializer()
+		self.serializer = serializer
 
 	@property
 	def redis(self) -> redis.Redis:

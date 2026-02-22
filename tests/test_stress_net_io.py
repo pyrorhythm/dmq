@@ -15,7 +15,6 @@ import asyncio
 import cProfile
 import pstats
 import ssl
-import sys
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -352,8 +351,6 @@ async def test_stress_30k_net_io_tasks(manager: QManager) -> None:
 	task_count = 30000
 	worker_count = 20
 	max_tasks_per_worker = 50
-	logger.remove()
-	logger.add(sys.stderr, level="INFO")
 
 	logger.info(f"\n{'=' * 60}")
 	logger.info(f"Starting stress test: {task_count} network IO tasks")
